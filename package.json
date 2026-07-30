@@ -1,0 +1,59 @@
+{
+  "name": "claude-wellness",
+  "version": "0.1.0",
+  "description": "A pixel-art wellness companion for your terminal — stretch, hydrate and move while Claude Code chews on a prompt.",
+  "author": "Romit Soley",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "wellness": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "ink": "^5.1.0",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "wellness",
+    "health",
+    "productivity",
+    "terminal",
+    "tui",
+    "pixel-art",
+    "stretch",
+    "hydration",
+    "pomodoro",
+    "rsi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soleyromit/claude-wellness.git"
+  },
+  "homepage": "https://github.com/soleyromit/claude-wellness#readme",
+  "bugs": {
+    "url": "https://github.com/soleyromit/claude-wellness/issues"
+  }
+}
