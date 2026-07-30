@@ -191,8 +191,9 @@ export const ACTIVITIES: readonly Activity[] = [
     id: 'breathe-box',
     group: 'breathing',
     title: 'Box breathing',
-    cue: 'Four counts each side of the box. Follow the sprite.',
+    cue: 'Four counts a side. Follow the marker around the box.',
     sprite: 'box-breath',
+    smoothSprite: true,
     reps: 4,
     steps: [
       hold('Breathe in', 4),
@@ -207,6 +208,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Physiological sigh',
     cue: 'Two inhales, one long exhale. Fastest way to drop your heart rate.',
     sprite: 'sigh',
+    smoothSprite: true,
     reps: 3,
     steps: [
       hold('Inhale through the nose', 3),

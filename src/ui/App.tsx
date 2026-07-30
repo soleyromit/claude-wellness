@@ -291,13 +291,18 @@ export function App({ env }: AppProps): React.ReactElement {
         />
       )}
 
-      {screen.kind === 'session' && (
-        <Session
-          plan={screen.plan}
-          state={sessionStateAt(screen.plan, now - screen.startedAt + sessionOffset.current)}
-          tier={tier}
-        />
-      )}
+      {screen.kind === 'session' &&
+        (() => {
+          const elapsed = now - screen.startedAt + sessionOffset.current;
+          return (
+            <Session
+              plan={screen.plan}
+              state={sessionStateAt(screen.plan, elapsed)}
+              tier={tier}
+              elapsedMs={elapsed}
+            />
+          );
+        })()}
 
       {screen.kind === 'complete' && (
         <SessionComplete title={screen.title} xp={screen.xp} tier={tier} />

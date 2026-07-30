@@ -91,6 +91,46 @@ export function sessionStateAt(plan: SessionPlan, elapsedMs: number): SessionSta
   };
 }
 
+/**
+ * Progress through the current repetition, 0..1.
+ *
+ * Breathing exercises are paced by *watching* the sprite, so their art has to
+ * move continuously rather than snapping once per step. Indexing frames by step
+ * means the box sits still while you're told to inhale — the one moment the
+ * animation exists to drive.
+ *
+ * Every rep runs the same steps, so a rep is a fixed slice of the total.
+ */
+export function repProgress(plan: SessionPlan, elapsedMs: number): number {
+  const repDuration = plan.totalMs / plan.reps;
+  if (repDuration <= 0) return 0;
+  const clamped = Math.max(0, Math.min(elapsedMs, plan.totalMs));
+  return (clamped % repDuration) / repDuration;
+}
+
+/**
+ * Which sprite frame to show at a given moment.
+ *
+ * Smooth activities sweep the whole strip across one rep; everything else holds
+ * one frame per step, which is what a stretch demo wants — you should be able
+ * to look away and look back without missing the pose.
+ */
+export function frameFor(
+  plan: SessionPlan,
+  state: SessionState,
+  frameCount: number,
+  elapsedMs: number,
+): number {
+  if (frameCount <= 0) return 0;
+
+  if (plan.activity.smoothSprite) {
+    const progress = state.finished ? 1 : repProgress(plan, elapsedMs);
+    return Math.min(frameCount - 1, Math.floor(progress * frameCount));
+  }
+
+  return state.entry.stepIndex % frameCount;
+}
+
 /** Elapsed time at which the next step begins — used by "skip step". */
 export function nextStepStart(plan: SessionPlan, elapsedMs: number): number {
   const state = sessionStateAt(plan, elapsedMs);

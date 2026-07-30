@@ -63,6 +63,15 @@ export interface Activity {
    * guided session — water is logged a cup at a time.
    */
   readonly instant?: boolean;
+  /**
+   * Sweep the sprite's frames continuously across each repetition instead of
+   * holding one frame per step.
+   *
+   * Set this when following the animation *is* the exercise — breathing, where
+   * the box has to visibly grow while you inhale. Leave it off for stretches,
+   * where a held pose is the correct thing to display.
+   */
+  readonly smoothSprite?: boolean;
 }
 
 /** What happened to an activity, appended to the log. */

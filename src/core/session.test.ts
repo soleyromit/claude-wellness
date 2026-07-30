@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVITIES, getActivity } from './activities.js';
-import { buildPlan, nextStepStart, sessionStateAt } from './session.js';
+import { getSprite } from '../sprites/index.js';
+import { buildPlan, frameFor, nextStepStart, repProgress, sessionStateAt } from './session.js';
 import type { Activity } from './types.js';
 
 const twoStep: Activity = {
@@ -87,6 +88,82 @@ describe('sessionStateAt', () => {
   it('clamps negative elapsed time to the start', () => {
     expect(sessionStateAt(plan, -500).entry.label).toBe('A');
     expect(sessionStateAt(plan, -500).stepProgress).toBe(0);
+  });
+});
+
+describe('repProgress', () => {
+  it('sweeps 0 to 1 across a single rep', () => {
+    const plan = buildPlan(twoStep); // 3000ms, one rep
+    expect(repProgress(plan, 0)).toBe(0);
+    expect(repProgress(plan, 1500)).toBe(0.5);
+  });
+
+  it('restarts each repetition', () => {
+    const plan = buildPlan({ ...twoStep, reps: 2 }); // 6000ms, 3000 per rep
+    expect(repProgress(plan, 1500)).toBe(0.5);
+    expect(repProgress(plan, 3000)).toBe(0); // second rep begins
+    expect(repProgress(plan, 4500)).toBe(0.5);
+  });
+
+  it('clamps outside the session', () => {
+    const plan = buildPlan(twoStep);
+    expect(repProgress(plan, -100)).toBe(0);
+    expect(repProgress(plan, 99999)).toBe(0);
+  });
+});
+
+describe('frameFor', () => {
+  const stretch = buildPlan(twoStep);
+  const breath = buildPlan({ ...twoStep, smoothSprite: true });
+
+  it('holds one frame per step for ordinary activities', () => {
+    // Step 0 for the first second, step 1 after that.
+    expect(frameFor(stretch, sessionStateAt(stretch, 0), 4, 0)).toBe(0);
+    expect(frameFor(stretch, sessionStateAt(stretch, 500), 4, 500)).toBe(0);
+    expect(frameFor(stretch, sessionStateAt(stretch, 1500), 4, 1500)).toBe(1);
+  });
+
+  it('advances continuously through the strip for smooth activities', () => {
+    // The whole point: a breathing sprite must keep moving *within* a step,
+    // not sit still while you are told to inhale.
+    const frames = [0, 400, 800, 1200, 1600, 2000, 2400, 2800].map((t) =>
+      frameFor(breath, sessionStateAt(breath, t), 8, t),
+    );
+    expect(frames).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('never runs off the end of the strip', () => {
+    expect(frameFor(breath, sessionStateAt(breath, 3000), 8, 3000)).toBe(7);
+    expect(frameFor(breath, sessionStateAt(breath, 99999), 8, 99999)).toBe(7);
+  });
+
+  it('cycles the strip once per repetition', () => {
+    const twoReps = buildPlan({ ...twoStep, smoothSprite: true, reps: 2 });
+    expect(frameFor(twoReps, sessionStateAt(twoReps, 0), 4, 0)).toBe(0);
+    expect(frameFor(twoReps, sessionStateAt(twoReps, 3000), 4, 3000)).toBe(0);
+  });
+
+  it('copes with a sprite that has no frames', () => {
+    expect(frameFor(stretch, sessionStateAt(stretch, 0), 0, 0)).toBe(0);
+  });
+});
+
+describe('breathing sprites stay in step with their instructions', () => {
+  it('shows a different frame at the start and end of every breathing step', () => {
+    for (const id of ['breathe-box', 'breathe-sigh']) {
+      const activity = getActivity(id)!;
+      expect(activity.smoothSprite, `${id} should sweep smoothly`).toBe(true);
+
+      const plan = buildPlan(activity);
+      const frames = getSprite(activity.sprite).frames.length;
+
+      for (const step of plan.entries.filter((e) => e.rep === 0)) {
+        const atStart = frameFor(plan, sessionStateAt(plan, step.startMs), frames, step.startMs);
+        const nearEnd = step.endMs - 1;
+        const atEnd = frameFor(plan, sessionStateAt(plan, nearEnd), frames, nearEnd);
+        expect(atEnd, `${id} step "${step.label}" never advances`).toBeGreaterThan(atStart);
+      }
+    }
   });
 });
 

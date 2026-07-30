@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { SessionPlan, SessionState } from '../core/session.js';
+import { frameFor, type SessionPlan, type SessionState } from '../core/session.js';
 import { getSprite } from '../sprites/index.js';
 import { Sprite } from './Sprite.js';
 import { COLORS, GROUP_COLORS, bar, type Tier } from './theme.js';
@@ -17,13 +17,15 @@ export interface SessionProps {
   readonly plan: SessionPlan;
   readonly state: SessionState;
   readonly tier: Tier;
+  /** Elapsed session time, so smooth sprites can track it continuously. */
+  readonly elapsedMs: number;
 }
 
-export function Session({ plan, state, tier }: SessionProps): React.ReactElement {
+export function Session({ plan, state, tier, elapsedMs }: SessionProps): React.ReactElement {
   const { activity } = plan;
   const color = GROUP_COLORS[activity.group];
   const sprite = getSprite(activity.sprite);
-  const frame = state.entry.stepIndex % sprite.frames.length;
+  const frame = frameFor(plan, state, sprite.frames.length, elapsedMs);
   const barWidth = tier === 'full' ? 24 : 14;
 
   return (

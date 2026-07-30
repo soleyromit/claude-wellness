@@ -188,7 +188,7 @@ describe('Session', () => {
 
   it('shows the current instruction and countdown', () => {
     const out = plain(
-      render(<Session plan={plan} state={sessionStateAt(plan, 0)} tier="full" />).lastFrame(),
+      render(<Session plan={plan} state={sessionStateAt(plan, 0)} tier="full" elapsedMs={0} />).lastFrame(),
     );
     expect(out).toContain('Stand up');
     expect(out).toContain('2s');
@@ -196,14 +196,14 @@ describe('Session', () => {
 
   it('shows the rep counter for rep-based activities', () => {
     const out = plain(
-      render(<Session plan={plan} state={sessionStateAt(plan, 0)} tier="full" />).lastFrame(),
+      render(<Session plan={plan} state={sessionStateAt(plan, 0)} tier="full" elapsedMs={0} />).lastFrame(),
     );
     expect(out).toContain('rep 1/10');
   });
 
   it('advances the rep counter as the session runs', () => {
     const out = plain(
-      render(<Session plan={plan} state={sessionStateAt(plan, 4500)} tier="full" />).lastFrame(),
+      render(<Session plan={plan} state={sessionStateAt(plan, 4500)} tier="full" elapsedMs={4500} />).lastFrame(),
     );
     expect(out).toContain('rep 2/10');
   });
@@ -211,14 +211,14 @@ describe('Session', () => {
   it('omits the rep counter for a single-pass activity', () => {
     const plank = buildPlan(getActivity('exercise-plank')!);
     const out = plain(
-      render(<Session plan={plank} state={sessionStateAt(plank, 0)} tier="full" />).lastFrame(),
+      render(<Session plan={plank} state={sessionStateAt(plank, 0)} tier="full" elapsedMs={0} />).lastFrame(),
     );
     expect(out).not.toContain('rep ');
   });
 
   it('offers a way to stop', () => {
     const out = plain(
-      render(<Session plan={plan} state={sessionStateAt(plan, 0)} tier="full" />).lastFrame(),
+      render(<Session plan={plan} state={sessionStateAt(plan, 0)} tier="full" elapsedMs={0} />).lastFrame(),
     );
     expect(out).toContain('[q] stop');
   });
