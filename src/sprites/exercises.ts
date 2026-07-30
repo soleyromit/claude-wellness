@@ -7,7 +7,54 @@
 
 import type { Sprite } from '../render/pixel.js';
 import { PALETTE } from './palette.js';
-import { makeSprite } from './make.js';
+import { makeSprite, rowBuilder } from './make.js';
+
+const r = rowBuilder(24);
+const _ = '........................';
+
+/**
+ * Side-view body used by plank and push-ups: a straight line from heels to
+ * head, propped on one arm.
+ *
+ * `drop` lowers the torso. Critically, the hand and the foot stay pinned to a
+ * fixed floor row while the torso moves, so the supporting arm gets *shorter*
+ * as the body descends. Moving the whole figure instead — the obvious way to
+ * build this — animates a person levitating with a rigid arm, which is not
+ * what a push-up looks like.
+ *
+ * Columns are fixed across every row: head x2-7, torso x7-16, hips and legs
+ * x17-23, supporting arm x5-6. Declaring them once is what keeps the body
+ * connected instead of drifting apart row by row.
+ */
+const FLOOR_ROW = 19;
+
+function sideBody(drop: number, extras: Record<number, string> = {}): string[] {
+  const rows = new Array<string>(24).fill(_);
+  const put = (y: number, value: string): void => {
+    if (y >= 0 && y < 24) rows[y] = value;
+  };
+
+  const top = 4 + drop;
+
+  put(top, r([3, 'hhhh']));
+  put(top + 1, r([2, 'hhhhhh']));
+  put(top + 2, r([2, 'hssssh']));
+  put(top + 3, r([2, 'sossss'], [8, 'cccc']));
+  put(top + 4, r([2, 'hssss'], [7, 'cccccccccc'], [17, 'pppp']));
+  put(top + 5, r([3, 'SSS'], [6, 'ss'], [8, 'ccccccccc'], [17, 'ppppppp']));
+  put(top + 6, r([5, 'ss'], [7, 'cccccccccc'], [17, 'ppppppp']));
+  put(top + 7, r([5, 'ss'], [8, 'cccccccc'], [16, 'PPPPPPPP']));
+
+  // Arm and leg reach down to the floor from wherever the torso ended up.
+  for (let y = top + 8; y < FLOOR_ROW; y++) {
+    put(y, r([5, 'ss'], [18, 'ppp']));
+  }
+  put(FLOOR_ROW, r([4, 'oooo'], [18, 'ooo']));
+  put(FLOOR_ROW + 1, r([2, 'aaaaaaaaaaaaaaaaaaaa']));
+
+  for (const [y, value] of Object.entries(extras)) put(Number(y), value);
+  return rows;
+}
 
 export const squat: Sprite = makeSprite(PALETTE, [
   // Standing tall, arms forward.
@@ -67,117 +114,18 @@ export const squat: Sprite = makeSprite(PALETTE, [
 ]);
 
 export const pushup: Sprite = makeSprite(PALETTE, [
-  // Arms extended, body away from the desk.
-  [
-    '........................',
-    '........................',
-    '..............dddddddddd',
-    '..............DDDDDDDDDD',
-    '.....hhhhh....d.........',
-    '....hhhhhhh...d.........',
-    '....hssssssh..d.........',
-    '....ssossss...d.........',
-    '....hsssss....d.........',
-    '.....SSSS.....d.........',
-    '...ccccccccssssd........',
-    '..cccccccccccccd........',
-    '..cccccccccccc.d........',
-    '...ppppppppp...d........',
-    '....pppppppp...d........',
-    '.....pppppp....d........',
-    '.....ppppp.....d........',
-    '.....pppp......d........',
-    '.....ppp.......d........',
-    '.....ppp.......d........',
-    '....ooooo......d........',
-    '...............d........',
-    '...............d........',
-    '........................',
-  ],
-  // Lowered: chest close to the desk edge, arms bent.
-  [
-    '........................',
-    '........................',
-    '..............dddddddddd',
-    '..............DDDDDDDDDD',
-    '.......hhhhh..d.........',
-    '......hhhhhhh.d.........',
-    '......hsssssshd.........',
-    '......ssossss.d.........',
-    '......hsssss..d.........',
-    '.......SSSS...d.........',
-    '.....cccccccssd.........',
-    '....cccccccccsd.........',
-    '....cccccccccc.d........',
-    '.....ppppppppp.d........',
-    '......pppppppp.d........',
-    '.......pppppp..d........',
-    '.......ppppp...d........',
-    '.......pppp....d........',
-    '.......ppp.....d........',
-    '.......ppp.....d........',
-    '......ooooo....d........',
-    '...............d........',
-    '...............d........',
-    '........................',
-  ],
+  // Top of the rep: arm fully extended.
+  sideBody(0),
+  // Bottom: torso down, arm folded short. Hand and toes have not moved.
+  sideBody(4),
 ]);
 
 export const plank: Sprite = makeSprite(PALETTE, [
-  // Straight line from heels to head.
-  [
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '..hhhhh.................',
-    '.hhhhhhh................',
-    '.hsssssh................',
-    '.ssossss................',
-    '.hsssss.cccccccc........',
-    '..SSS..cccccccccppppp...',
-    '..ss..ccccccccccpppppppp',
-    '..ss..ccccccccccpppppppp',
-    '..ss...........PPPPPPPPP',
-    '..ss....................',
-    '..ss...............ppp..',
-    '..ss...............ppp..',
-    '.oooo..............ppp..',
-    '...................ooo..',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-  ],
-  // Same hold, with strain marks — the sprite pulses rather than moves.
-  [
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '.r......................',
-    '..hhhhh................r',
-    '.hhhhhhh................',
-    '.hsssssh................',
-    '.ssossss................',
-    '.hsssss.cccccccc........',
-    '..SSS..cccccccccppppp...',
-    '..ss..ccccccccccpppppppp',
-    '..ss..ccccccccccpppppppp',
-    '..ss...........PPPPPPPPP',
-    '..ss....................',
-    '..ss...............ppp..',
-    '..ss...............ppp..',
-    '.oooo..............ppp..',
-    '...................ooo..',
-    '.......yyyyyyyyyy.......',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-  ],
+  // Held low on the forearms.
+  sideBody(5),
+  // The same hold with the core lit up. A plank pulses; it does not travel,
+  // so animating movement here would be teaching the exercise wrong.
+  sideBody(5, { 16: r([5, 'ss'], [7, 'yyyyyyyyyy'], [17, 'ppppppp']) }),
 ]);
 
 export const calf: Sprite = makeSprite(PALETTE, [

@@ -13,6 +13,41 @@ export interface MakeOptions {
   readonly name?: string;
 }
 
+/** A run of pixels placed at an explicit column. */
+export type Segment = readonly [x: number, pixels: string];
+
+/**
+ * Build one row by placing segments at explicit columns.
+ *
+ * Hand-counting leading dots to align a limb is how sprites end up with
+ * disconnected torsos and floating hands: the arithmetic is invisible in the
+ * source, so a row that is one pixel out looks exactly like one that isn't.
+ * Stating the column makes alignment reviewable — two rows that should line up
+ * carry the same number — and overlaps or overruns throw instead of silently
+ * shifting the art.
+ */
+export function row(width: number, ...segments: Segment[]): string {
+  const cells = new Array<string>(width).fill('.');
+
+  for (const [x, pixels] of segments) {
+    if (x < 0 || x + pixels.length > width) {
+      throw new Error(`Segment "${pixels}" at x=${x} does not fit in width ${width}`);
+    }
+    for (let i = 0; i < pixels.length; i++) {
+      const ch = pixels[i]!;
+      if (ch === '.') continue; // explicit hole, leaves whatever is there
+      cells[x + i] = ch;
+    }
+  }
+
+  return cells.join('');
+}
+
+/** `row` bound to a fixed canvas width, for a whole sprite file. */
+export function rowBuilder(width: number): (...segments: Segment[]) => string {
+  return (...segments) => row(width, ...segments);
+}
+
 export function makeSprite(
   palette: Readonly<Record<string, string>>,
   frames: readonly (readonly string[])[],
