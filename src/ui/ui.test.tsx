@@ -213,18 +213,19 @@ describe('Picker', () => {
     expect(grouped[1]!.dueCount).toBe(0);
   });
 
-  it('shows the groups with their due counts', () => {
+  it('shows every group as a tab, with a count of what is due', () => {
     const out = plain(render(<Picker {...props} />).lastFrame());
     expect(out).toContain('Exercise');
     expect(out).toContain('Stretch');
-    expect(out).toContain('1 due');
+    expect(out).toContain('Breathing');
+    // The due count rides on the tab itself.
+    expect(out).toMatch(/Exercise 1/);
   });
 
-  it('shows the selected group\'s activities beside it', () => {
+  it("shows the selected group's activities and no others", () => {
     const out = plain(render(<Picker {...props} />).lastFrame());
     expect(out).toContain('Sit-to-stand squats');
     expect(out).toContain('Plank');
-    // Another group's activities are not in the list.
     expect(out).not.toContain('Wrist & finger stretch');
   });
 
@@ -234,15 +235,19 @@ describe('Picker', () => {
     expect(out).not.toContain('Sit-to-stand squats');
   });
 
-  it('shows a cursor in the focused column only', () => {
-    const onGroups = plain(render(<Picker {...props} />).lastFrame());
-    const onActivities = plain(
-      render(<Picker {...props} column="activities" />).lastFrame(),
-    );
-    // Exactly one cursor either way, so it is always clear what arrows drive.
-    expect((onGroups.match(/❯/g) ?? []).length).toBe(1);
-    expect((onActivities.match(/❯/g) ?? []).length).toBe(1);
-    expect(onGroups).not.toBe(onActivities);
+  it('marks the selection with a filled band rather than a caret', () => {
+    // A caret is easy to lose in a narrow pane; a background fill is not.
+    const frame = render(<Picker {...props} column="activities" />).lastFrame() ?? '';
+    // Some background-colour escape is present, whichever form Ink emits.
+    expect(frame).toMatch(/\[4[0-8][;m]/);
+    expect(plain(frame)).not.toContain('❯');
+  });
+
+  it('dims the selection in the column that is not focused', () => {
+    const onTabs = render(<Picker {...props} />).lastFrame() ?? '';
+    const onList = render(<Picker {...props} column="activities" />).lastFrame() ?? '';
+    // Same rows, different emphasis, so it is clear which column arrows drive.
+    expect(onTabs).not.toBe(onList);
   });
 
   it('previews the highlighted activity before you commit to it', () => {
@@ -263,15 +268,11 @@ describe('Picker', () => {
     expect(out).not.toContain('▀');
   });
 
-  it('shows one column at a time in the narrowest pane', () => {
-    const groups = plain(render(<Picker {...props} tier="minimal" />).lastFrame());
-    expect(groups).toContain('Exercise');
-    expect(groups).not.toContain('Sit-to-stand squats');
-
-    const list = plain(
-      render(<Picker {...props} tier="minimal" column="activities" />).lastFrame(),
-    );
-    expect(list).toContain('Sit-to-stand squats');
+  it('keeps tabs and list usable in the narrowest pane', () => {
+    const out = plain(render(<Picker {...props} tier="minimal" />).lastFrame());
+    expect(out).toContain('Exercise');
+    expect(out).toContain('Sit-to-stand squats');
+    expect(out).not.toContain('▀');
   });
 
   it('explains how to fix an empty routine', () => {

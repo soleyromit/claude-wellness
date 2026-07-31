@@ -287,24 +287,38 @@ export function App({ env }: AppProps): React.ReactElement {
         return;
       }
 
-      if (key.rightArrow || (key.tab && !key.shift)) {
-        setScreen({ ...screen, column: 'activities', groupIndex, activityIndex: 0 });
-        return;
-      }
-      if (key.leftArrow || (key.tab && key.shift)) {
-        setScreen({ ...screen, column: 'groups', groupIndex, activityIndex });
+      // Groups are tabs across the top, so they move horizontally; the list
+      // below moves vertically. Matching the keys to the layout means you never
+      // have to remember which axis a column uses.
+      const horizontal =
+        key.rightArrow || input === 'l' ? 1 : key.leftArrow || input === 'h' ? -1 : 0;
+      if (horizontal !== 0) {
+        const next = (groupIndex + horizontal + groups.length) % groups.length;
+        setScreen({ ...screen, column: 'groups', groupIndex: next, activityIndex: 0 });
         return;
       }
 
-      const step = key.upArrow || input === 'k' ? -1 : key.downArrow || input === 'j' ? 1 : 0;
-      if (step !== 0) {
+      const vertical = key.downArrow || input === 'j' ? 1 : key.upArrow || input === 'k' ? -1 : 0;
+      if (vertical !== 0) {
         if (screen.column === 'groups') {
-          const next = (groupIndex + step + groups.length) % groups.length;
-          setScreen({ ...screen, groupIndex: next, activityIndex: 0 });
-        } else {
-          const next = (activityIndex + step + inGroup.length) % inGroup.length;
-          setScreen({ ...screen, groupIndex, activityIndex: next });
+          // Down drops into the list; up from the tabs has nowhere to go.
+          if (vertical > 0) setScreen({ ...screen, column: 'activities', activityIndex: 0 });
+          return;
         }
+        // Up off the top of the list returns to the tabs, so the two are one
+        // continuous space rather than separate modes.
+        if (vertical < 0 && activityIndex === 0) {
+          setScreen({ ...screen, column: 'groups' });
+          return;
+        }
+        const next = Math.max(0, Math.min(inGroup.length - 1, activityIndex + vertical));
+        setScreen({ ...screen, groupIndex, activityIndex: next });
+        return;
+      }
+
+      if (key.tab) {
+        const next = (groupIndex + (key.shift ? -1 : 1) + groups.length) % groups.length;
+        setScreen({ ...screen, groupIndex: next, activityIndex: 0 });
         return;
       }
 

@@ -201,3 +201,55 @@ export function renderSprite(sprite: Sprite, frameIndex: number, depth: ColorDep
 export function spriteLineHeight(sprite: Sprite): number {
   return Math.ceil(sprite.height / 2);
 }
+
+/**
+ * Shrink a sprite by a whole-number factor, for use as a thumbnail.
+ *
+ * Figures are drawn at 48 pixels because that is what it takes to carry a face
+ * and a hand. That is twenty-four terminal rows, which is right for the one
+ * sprite you are following and far too big for a preview sitting beside a
+ * menu — it swamps the list it is supposed to be illustrating.
+ *
+ * Each output pixel takes the most common non-transparent colour in its block
+ * rather than a single sample. Nearest-neighbour drops whichever thin features
+ * happen to fall between sample points, which at this size means losing a nose
+ * or a hand entirely.
+ */
+export function downscale(sprite: Sprite, factor: number): Sprite {
+  if (factor <= 1) return sprite;
+
+  const width = Math.floor(sprite.width / factor);
+  const height = Math.floor(sprite.height / factor);
+
+  const frames = sprite.frames.map((frame) => {
+    const rows: string[] = [];
+    for (let y = 0; y < height; y++) {
+      let row = '';
+      for (let x = 0; x < width; x++) {
+        const counts = new Map<string, number>();
+        for (let dy = 0; dy < factor; dy++) {
+          const line = frame[y * factor + dy];
+          if (!line) continue;
+          for (let dx = 0; dx < factor; dx++) {
+            const ch = line[x * factor + dx];
+            if (!ch || ch === '.' || ch === ' ') continue;
+            counts.set(ch, (counts.get(ch) ?? 0) + 1);
+          }
+        }
+        let best = '.';
+        let bestCount = 0;
+        for (const [ch, count] of counts) {
+          if (count > bestCount) {
+            best = ch;
+            bestCount = count;
+          }
+        }
+        row += best;
+      }
+      rows.push(row);
+    }
+    return rows;
+  });
+
+  return { width, height, palette: sprite.palette, frames };
+}

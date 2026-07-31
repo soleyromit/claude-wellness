@@ -17,7 +17,22 @@ export const COLORS = {
   warn: '#ffd166',
   danger: '#ef6f6c',
   water: '#2f9fd8',
+  /**
+   * Selection fill. A full-width band is how a terminal list shows what is
+   * selected — a lone caret is easy to lose, especially in a narrow pane
+   * glanced at from the corner of your eye.
+   */
+  selection: '#22304a',
+  selectionMuted: '#1b2230',
+  rule: '#2a3140',
 } as const;
+
+/** Pad or clip to an exact width so a highlighted row fills it evenly. */
+export function fit(text: string, width: number): string {
+  if (text.length === width) return text;
+  if (text.length < width) return text + ' '.repeat(width - text.length);
+  return width <= 1 ? text.slice(0, width) : `${text.slice(0, width - 1)}…`;
+}
 
 /** Each group gets a colour, used consistently by rings, stats and nudges. */
 export const GROUP_COLORS: Readonly<Record<ActivityGroup, string>> = {
