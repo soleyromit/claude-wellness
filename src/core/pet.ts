@@ -68,8 +68,8 @@ export function computePet(
   config: Config,
   now: number,
 ): PetState {
-  const hasHistory = events.some((e) => e.type === 'completed');
-  if (!hasHistory) {
+  const completions = events.filter((e) => e.type === 'completed');
+  if (completions.length === 0) {
     return {
       mood: 'ok',
       adherence: 0,
@@ -77,19 +77,42 @@ export function computePet(
     };
   }
 
-  let sum = 0;
-  for (let i = 1; i <= HISTORY_DAYS; i++) {
-    sum += ratioOn(events, config, addDays(now, -i));
-  }
-  const adherence = sum / HISTORY_DAYS;
+  // Only count days you actually had the app. Averaging over a fixed window
+  // means the days before you installed it score zero, so someone who used it
+  // properly on their first day is greeted by a dying plant — which is both
+  // wrong and the fastest possible way to get the thing uninstalled.
+  const firstDay = dayStart(Math.min(...completions.map((e) => e.ts)));
 
+  const scored: number[] = [];
+  for (let i = 1; i <= HISTORY_DAYS; i++) {
+    const day = addDays(now, -i);
+    if (dayStart(day) < firstDay) continue;
+    scored.push(ratioOn(events, config, day));
+  }
+
+  const todayRatio = ratioOn(events, config, now);
+
+  // Still on day one: judge today on its own rather than against days that
+  // never existed.
+  if (scored.length === 0) {
+    const mood = moodFromAdherence(Math.max(todayRatio, 0.45));
+    return { mood, adherence: todayRatio, message: MESSAGES[mood] };
+  }
+
+  const adherence = scored.reduce((a, b) => a + b, 0) / scored.length;
   let mood = moodFromAdherence(adherence);
 
   // Today pulls upward only.
-  if (ratioOn(events, config, now) >= 0.5) {
+  if (todayRatio >= 0.5) {
     const idx = MOOD_ORDER.indexOf(mood);
     mood = MOOD_ORDER[Math.min(idx + 1, MOOD_ORDER.length - 1)]!;
   }
 
   return { mood, adherence, message: MESSAGES[mood] };
+}
+
+/** Local midnight of the day containing `ts`. */
+function dayStart(ts: number): number {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }

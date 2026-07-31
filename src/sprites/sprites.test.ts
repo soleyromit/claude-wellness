@@ -49,10 +49,17 @@ describe('sprite registry', () => {
     }
   });
 
-  it('every sprite is 24x24 so layouts can assume a fixed size', () => {
+  it('every sprite is square, so nothing renders stretched', () => {
     for (const [name, sprite] of Object.entries(SPRITES)) {
-      expect(sprite.width, `${name} width`).toBe(24);
-      expect(sprite.height, `${name} height`).toBe(24);
+      expect(sprite.width, `${name} is not square`).toBe(sprite.height);
+    }
+  });
+
+  it('every sprite is one of the two supported canvas sizes', () => {
+    // 24 for props and simple figures; 32 where the pose needs the extra room
+    // to stay readable once the sprite is halved into terminal rows.
+    for (const [name, sprite] of Object.entries(SPRITES)) {
+      expect([24, 32], `${name} has an unexpected size`).toContain(sprite.width);
     }
   });
 

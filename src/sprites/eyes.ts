@@ -1,112 +1,147 @@
 /**
  * Eye art.
  *
- * Rendered as a close-up rather than a figure — an eye at this size reads far
- * more clearly than a tiny person looking into the distance, and the iris
- * moving between frames makes the "look away" instruction obvious without
- * needing the caption.
+ * Drawn as a close-up: an eye at this size reads far more clearly than a tiny
+ * person looking into the distance, and a moving iris makes "look away" obvious
+ * without the caption.
+ *
+ * The key decision is that **a shut eye is not an open eye with the white
+ * filled in**. The first version kept the same almond outline in every frame
+ * and only changed what was inside it, so open, shut and wide all had identical
+ * silhouettes and the blink was invisible. Here the lid genuinely closes: the
+ * almond collapses to a single curved lash line, and the wide frame opens
+ * taller than neutral with a raised brow. Three distinct shapes.
  */
 
 import type { Sprite } from '../render/pixel.js';
 import { PALETTE } from './palette.js';
 import { makeSprite } from './make.js';
 
-/** Eye shape with the iris at a given horizontal offset, or shut. */
-function eye(irisCol: number | null, extras: Record<number, string> = {}): string[] {
-  const rows: string[] = [];
+const SIZE = 24;
+type Grid = string[][];
 
-  const put = (y: number, base: string): void => {
-    rows.push(extras[y] ?? base);
-  };
+function blank(): Grid {
+  return Array.from({ length: SIZE }, () => new Array<string>(SIZE).fill('.'));
+}
 
-  put(0, '........................');
-  put(1, '........................');
-  put(2, '........................');
-  put(3, '......oooooooooooo......');
-  put(4, '....oo............oo....');
-  put(5, '...o................o...');
+function plot(grid: Grid, x: number, y: number, ch: string): void {
+  if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
+  grid[y]![x] = ch;
+}
 
-  if (irisCol === null) {
-    // Shut: a single closed lash line with lashes below.
-    put(6, '..o..................o..');
-    put(7, '..o..................o..');
-    put(8, '..oooooooooooooooooooo..');
-    put(9, '...ooooooooooooooooo....');
-    put(10, '....o....o....o....o....');
-    put(11, '........................');
-    put(12, '........................');
-    put(13, '........................');
-    put(14, '........................');
-  } else {
-    for (let y = 6; y <= 14; y++) {
-      if (extras[y] !== undefined) {
-        rows.push(extras[y]!);
-        continue;
-      }
-      if (y === 6 || y === 14) {
-        rows.push('..o..................o..');
-        continue;
-      }
-      // White of the eye spanning columns 3..20, with the iris drawn on top.
-      const cells = new Array<string>(24).fill('.');
-      cells[2] = 'o';
-      cells[21] = 'o';
-      for (let x = 3; x <= 20; x++) cells[x] = 'w';
+const CX = 11; // horizontal centre of the eye
+const CY = 11; // vertical centre
 
-      const irisTop = 7;
-      const irisBottom = 13;
-      if (y >= irisTop && y <= irisBottom) {
-        const radius = y === irisTop || y === irisBottom ? 2 : 3;
-        for (let dx = -radius; dx <= radius; dx++) {
-          const x = irisCol + dx;
-          if (x >= 3 && x <= 20) cells[x] = 'b';
-        }
-        // Pupil and catch-light in the middle band.
-        if (y >= irisTop + 2 && y <= irisBottom - 2) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const x = irisCol + dx;
-            if (x >= 3 && x <= 20) cells[x] = 'o';
-          }
-        }
-        if (y === irisTop + 1) {
-          const x = irisCol + 1;
-          if (x >= 3 && x <= 20) cells[x] = 'w';
-        }
-      }
-      rows.push(cells.join(''));
+/**
+ * An open eye.
+ *
+ * @param openness Vertical half-height of the aperture. Larger is wider open.
+ * @param irisX    Column the iris is centred on.
+ */
+function openEye(openness: number, irisX: number, brow = false): string[] {
+  const grid = blank();
+  const halfWidth = 9;
+
+  // Lid outline: an ellipse. Sampling it per column keeps the corners sharp,
+  // which is what makes it read as an eye rather than a circle.
+  for (let dx = -halfWidth; dx <= halfWidth; dx++) {
+    const t = dx / halfWidth;
+    const h = Math.round(openness * Math.sqrt(Math.max(0, 1 - t * t)));
+
+    for (let dy = -h; dy <= h; dy++) plot(grid, CX + dx, CY + dy, 'w');
+    plot(grid, CX + dx, CY - h, 'o');
+    plot(grid, CX + dx, CY + h, 'o');
+  }
+
+  // Iris and pupil, clipped to the aperture so a wide iris can't spill out.
+  for (let dy = -4; dy <= 4; dy++) {
+    for (let dx = -4; dx <= 4; dx++) {
+      if (dx * dx + dy * dy > 16) continue;
+      const x = irisX + dx;
+      const y = CY + dy;
+      const t = (x - CX) / halfWidth;
+      const h = Math.round(openness * Math.sqrt(Math.max(0, 1 - t * t)));
+      if (Math.abs(y - CY) >= h) continue;
+      plot(grid, x, y, dx * dx + dy * dy <= 4 ? 'o' : 'b');
+    }
+  }
+  // Catch-light.
+  plot(grid, irisX - 1, CY - 2, 'w');
+
+  if (brow) {
+    for (let dx = -8; dx <= 8; dx++) {
+      const lift = Math.round(2 * Math.sqrt(Math.max(0, 1 - (dx / 8) ** 2)));
+      const y = CY - openness - 2 - lift;
+      plot(grid, CX + dx, y, 'h');
+      plot(grid, CX + dx, y + 1, 'H');
     }
   }
 
-  put(15, '...o................o...');
-  put(16, '....oo............oo....');
-  put(17, '......oooooooooooo......');
-  put(18, '........................');
-  put(19, '........................');
-  put(20, '........................');
-  put(21, '........................');
-  put(22, '........................');
-  put(23, '........................');
-
-  return rows;
+  return grid.map((r) => r.join(''));
 }
 
-/** Iris tracks from centre out to the far distance and back. */
-export const eyes: Sprite = makeSprite(PALETTE, [
-  eye(11, { 20: '.........yyyyyy.........' }),
-  eye(7, { 20: '...yyy..................' }),
-  eye(5, { 20: '.yyy....................' }),
-  eye(7, { 20: '...yyy..................' }),
-]);
+/**
+ * A shut eye: a lash line with no aperture at all, plus lashes below.
+ *
+ * Nothing of the open shape survives, which is the entire point — this has to
+ * be unmistakable at a glance against the open frames.
+ */
+function shutEye(): string[] {
+  const grid = blank();
+  const halfWidth = 9;
 
-/** Squeeze shut, then open wide. */
-export const blink: Sprite = makeSprite(PALETTE, [
-  eye(11),
-  eye(null),
-  eye(null),
-  eye(11, {
-    3: '.....oooooooooooooo.....',
-    4: '...oo..............oo...',
-    17: '.....oooooooooooooo.....',
-    16: '...oo..............oo...',
-  }),
-]);
+  for (let dx = -halfWidth; dx <= halfWidth; dx++) {
+    const t = Math.abs(dx / halfWidth);
+    // A shallow downward curve, deepest in the middle.
+    const y = CY + Math.round(2 * (1 - t * t));
+    plot(grid, CX + dx, y, 'o');
+    plot(grid, CX + dx, y - 1, 'o');
+  }
+
+  // Lashes, angled down and out from the closed lid.
+  for (const [dx, dy] of [
+    [-8, 3], [-5, 4], [-2, 5], [1, 5], [4, 4], [7, 3],
+  ] as const) {
+    plot(grid, CX + dx, CY + dy, 'o');
+    plot(grid, CX + dx, CY + dy + 1, 'o');
+  }
+
+  return grid.map((r) => r.join(''));
+}
+
+/** Distance markers under the eye, showing focus travelling outward. */
+function withMarker(rows: string[], reach: number): string[] {
+  const grid = rows.map((r) => [...r]);
+  const width = Math.max(1, Math.round(reach * 6));
+  for (let i = 0; i < width; i++) plot(grid, CX - 3 + i, 21, 'y');
+  return grid.map((r) => r.join(''));
+}
+
+/**
+ * 20-20-20: the iris tracks from centre out to the far corner and back, with a
+ * marker below showing focus travelling into the distance.
+ */
+export const eyes: Sprite = makeSprite(
+  PALETTE,
+  [
+    withMarker(openEye(6, CX), 1),
+    withMarker(openEye(6, CX - 3), 0.6),
+    withMarker(openEye(6, CX - 6), 0.2),
+    withMarker(openEye(6, CX - 3), 0.6),
+  ],
+  { shade: false },
+);
+
+/** Blink drill: squeeze shut, then open wide. */
+export const blink: Sprite = makeSprite(
+  PALETTE,
+  [
+    openEye(6, CX),
+    openEye(2, CX), // half closed, so the blink has a middle
+    shutEye(),
+    shutEye(),
+    openEye(3, CX),
+    openEye(7, CX, true), // wide, with the brow lifted
+  ],
+  { shade: false },
+);

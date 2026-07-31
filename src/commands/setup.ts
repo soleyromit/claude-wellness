@@ -18,7 +18,7 @@ import {
 } from '../claude/hooks.js';
 import { readClaudeState } from '../claude/signal.js';
 import { detectColorDepth } from '../render/palette.js';
-import { detectAdapter, spawnPane } from '../spawn/index.js';
+import { detectAdapter, manualSplitHint, spawnPane } from '../spawn/index.js';
 import { claudeSettingsPath, dataDir } from '../store/paths.js';
 import { loadConfig } from '../store/config.js';
 import { ACTIVITY_GROUPS } from '../core/types.js';
@@ -61,10 +61,9 @@ export function runInit(options: InitOptions = {}): string {
   } else {
     lines.push(
       outcome.reason === 'no-adapter'
-        ? '  ! Could not detect a terminal I know how to split.'
-        : `  ! Could not open a pane (${outcome.detail ?? 'unknown error'}).`,
+        ? `  ! ${manualSplitHint(env)}`
+        : `  ! Could not open a pane (${outcome.detail ?? 'unknown error'}). Run it yourself:`,
     );
-    lines.push('    Run this yourself in a second pane:');
     lines.push(`      ${WATCH_COMMAND}`);
   }
 
@@ -134,7 +133,7 @@ export function runDoctor(env: NodeJS.ProcessEnv = process.env, now = Date.now()
   check(
     adapter !== null,
     'Terminal supports auto-split',
-    adapter ? adapter.label : 'unknown terminal — start the pane manually',
+    adapter ? adapter.label : manualSplitHint(env).replace(/:$/, ''),
   );
 
   const depth = detectColorDepth(env);

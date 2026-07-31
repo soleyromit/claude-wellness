@@ -101,6 +101,34 @@ describe('computePet', () => {
     expect(computePet(events, config(), NOON).adherence).toBe(0);
   });
 
+  it('does not punish you for days before you installed it', () => {
+    // Regression: the trailing window scored the two days before first use as
+    // zeros, so a good first day still produced a dying plant.
+    const firstDay = dayTouching(3, NOON);
+    const pet = computePet(firstDay, config(), NOON);
+    expect(pet.mood).not.toBe('sad');
+    expect(pet.mood).not.toBe('wilting');
+  });
+
+  it('still starts a first-day user neutral if they have barely done anything', () => {
+    const pet = computePet(dayTouching(1, NOON), config(), NOON);
+    expect(pet.mood).toBe('ok');
+  });
+
+  it('rewards a strong first day', () => {
+    expect(computePet(dayTouching(4, NOON), config(), NOON).mood).toBe('thriving');
+  });
+
+  it('starts judging properly once there is history to judge', () => {
+    // Used it well yesterday, nothing today — the window now has a real day in
+    // it, so the score reflects that rather than being waived.
+    const events = [...dayTouching(4, addDays(NOON, -1))];
+    expect(computePet(events, config(), NOON).mood).toBe('thriving');
+
+    const neglected = [...dayTouching(1, addDays(NOON, -1))];
+    expect(computePet(neglected, config(), NOON).mood).toBe('wilting');
+  });
+
   it('always carries a message', () => {
     for (const count of [1, 2, 4]) {
       expect(computePet(history(count), config(), NOON).message.length).toBeGreaterThan(0);

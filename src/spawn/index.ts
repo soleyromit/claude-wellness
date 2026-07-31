@@ -125,6 +125,29 @@ export function detectAdapter(env: NodeJS.ProcessEnv = process.env): SpawnAdapte
   return ADAPTERS.find((adapter) => adapter.detect(env)) ?? null;
 }
 
+/**
+ * Advice for terminals we can't drive.
+ *
+ * Some terminals simply have no way to split from a command — VS Code's
+ * integrated terminal is the common one, and it's where a lot of people run
+ * Claude Code. "Unknown terminal" is true but useless; naming the shortcut is
+ * the difference between a dead end and a working setup.
+ */
+export function manualSplitHint(env: NodeJS.ProcessEnv = process.env): string {
+  const program = (env['TERM_PROGRAM'] ?? '').toLowerCase();
+
+  if (program === 'vscode') {
+    return 'VS Code cannot split its terminal from a command — press Ctrl+Shift+5, then run:';
+  }
+  if (program === 'ghostty') {
+    return 'Ghostty has no split CLI — press Cmd+D, then run:';
+  }
+  if (program === 'hyper' || program === 'alacritty') {
+    return 'Open a second window, then run:';
+  }
+  return 'Run this yourself in a second pane:';
+}
+
 export type SpawnOutcome =
   | { readonly ok: true; readonly adapter: SpawnAdapter }
   | { readonly ok: false; readonly reason: 'no-adapter' | 'failed'; readonly detail?: string };
