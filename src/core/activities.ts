@@ -55,6 +55,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Wrist & finger stretch',
     cue: 'The one that actually prevents RSI. Do it properly.',
     sprite: 'wrists',
+    framesPerStep: 5,
     steps: [
       hold('Arm out, palm up — pull fingers back gently', 15),
       hold('Palm down — pull fingers toward you', 15),
@@ -69,6 +70,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Neck rolls',
     cue: 'Slow. If it clicks, go slower.',
     sprite: 'neck',
+    framesPerStep: 5,
     steps: [
       hold('Ear toward right shoulder', 12),
       hold('Chin down to chest', 12),
@@ -82,6 +84,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Shoulder shrugs',
     cue: 'Drop the shoulders you have been holding at ear height.',
     sprite: 'shoulders',
+    framesPerStep: 5,
     reps: 6,
     steps: [hold('Lift shoulders to ears', 3), hold('Drop and release', 3)],
   },
@@ -91,6 +94,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Chest opener',
     cue: 'Undo the hunch. Hands behind your back, squeeze the shoulder blades.',
     sprite: 'chest',
+    framesPerStep: 5,
     steps: [
       hold('Clasp hands behind your back', 5),
       hold('Lift arms, open the chest, look up', 20),
@@ -103,6 +107,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Seated spinal twist',
     cue: 'Your spine has been in one shape for an hour.',
     sprite: 'twist',
+    framesPerStep: 5,
     steps: [
       hold('Sit tall, feet flat', 5),
       hold('Twist right — hand on chair back', 15),
@@ -116,6 +121,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Seated cat-cow',
     cue: 'Mobilise the whole spine without leaving the chair.',
     sprite: 'catcow',
+    framesPerStep: 5,
     reps: 5,
     steps: [
       hold('Arch back, chest forward, look up', 4),
@@ -128,6 +134,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Ankle circles',
     cue: 'Blood has been pooling in your feet. Move it.',
     sprite: 'ankles',
+    framesPerStep: 5,
     steps: [
       hold('Right ankle — 10 circles clockwise', 12),
       hold('Right ankle — 10 the other way', 12),
@@ -143,6 +150,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Sit-to-stand squats',
     cue: 'Use the chair you are already in. No equipment, no excuse.',
     sprite: 'squat',
+    framesPerStep: 5,
     reps: 10,
     steps: [hold('Stand up — drive through the heels', 2), hold('Sit back down slowly', 2)],
   },
@@ -152,6 +160,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Desk push-ups',
     cue: 'Hands on the desk edge, body straight. Ten of them.',
     sprite: 'pushup',
+    framesPerStep: 5,
     reps: 10,
     steps: [hold('Lower to the desk', 2), hold('Push back up', 2)],
   },
@@ -161,6 +170,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Plank',
     cue: 'Thirty seconds. Straight line from heels to head.',
     sprite: 'plank',
+    framesPerStep: 5,
     steps: [
       hold('Get into position', 5),
       hold('Hold — brace the core, do not sag', 30),
@@ -173,6 +183,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Calf raises',
     cue: 'Stand up and pump the calves — they are your second heart.',
     sprite: 'calf',
+    framesPerStep: 5,
     reps: 15,
     steps: [hold('Up on the toes', 2), hold('Heels down slowly', 2)],
   },
@@ -182,6 +193,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Lunges',
     cue: 'Your hip flexors have been folded shut for an hour.',
     sprite: 'lunge',
+    framesPerStep: 5,
     reps: 8,
     steps: [hold('Step forward, drop the back knee', 3), hold('Push back to standing', 3)],
   },
@@ -224,6 +236,7 @@ export const ACTIVITIES: readonly Activity[] = [
     title: 'Posture check',
     cue: 'Ears over shoulders, shoulders over hips. Screen at eye height.',
     sprite: 'posture',
+    framesPerStep: 5,
     steps: [
       hold('Sit back into the chair', 4),
       hold('Stack ears over shoulders', 6),

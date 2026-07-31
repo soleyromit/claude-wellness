@@ -1,49 +1,73 @@
 /**
- * Exercise poses, drawn side-on from an articulated figure.
+ * Exercise poses, drawn side-on from an articulated figure and animated
+ * between key positions.
  *
- * Side view is the whole point. Front-on, a squat, a lunge and a calf raise all
- * collapse to the same standing silhouette once halved to sixteen terminal
- * rows — the hip hinge and knee bend that distinguish them are edge-on and
- * invisible. Turned side-on and exaggerated well past life, each one has a
- * silhouette you can name at a glance.
+ * Two things make these followable, and both were missing before:
  *
- * Poses are deliberately caricatured: the squat sits deeper and the lunge is
- * longer than anyone would actually perform. Readable beats anatomical when
- * the whole figure is thirty-two pixels tall.
+ *  - **Side view.** Front-on, the hip hinge and knee bend that distinguish a
+ *    squat from a lunge from a calf raise are edge-on and invisible, so all
+ *    three reduced to "person standing".
+ *  - **In-between frames.** Two static frames tell you where a movement starts
+ *    and ends but not the path between, which is the part you actually copy.
+ *    Every step now gets its own block of frames easing into the pose.
+ *
+ * Poses are deliberately caricatured — the squat sits deeper and the lunge is
+ * longer than anyone would really perform. Readable beats anatomical when the
+ * whole figure is thirty-two pixels tall.
  */
 
 import type { Sprite } from '../render/pixel.js';
 import { PALETTE } from './palette.js';
 import { makeSprite } from './make.js';
-import { arrow, drawPose, ground, toRows, type Pose } from './figure.js';
+import {
+  arrow,
+  drawPose,
+  framesFromPoses,
+  ground,
+  toRows,
+  type Pose,
+} from './figure.js';
 
-/** Render a pose with the floor under it. */
-function frame(pose: Pose, decorate?: (grid: string[][]) => void): string[] {
-  const grid = drawPose(pose);
-  ground(grid);
-  decorate?.(grid);
-  return toRows(grid);
+/** Frames each instruction step gets. Must match `framesPerStep` on the activity. */
+export const FRAMES_PER_STEP = 5;
+
+/**
+ * Build a strip from one key pose per step.
+ *
+ * `cue` places a directional arrow so the movement's direction is explicit
+ * rather than inferred — the single most useful addition for someone glancing
+ * at the pane mid-task.
+ */
+function strip(
+  poses: readonly Pose[],
+  cue?: (step: number) => { x: number; y: number; dir: 'up' | 'down' } | null,
+): string[][] {
+  return framesFromPoses(poses, FRAMES_PER_STEP, (pose, step, t) => {
+    const grid = drawPose(pose);
+    ground(grid);
+    const c = cue?.(step);
+    // Fade the arrow out as the pose settles, so it marks the movement rather
+    // than sitting there through the hold.
+    if (c && t < 0.9) arrow(grid, c.x, c.y, c.dir);
+    return toRows(grid);
+  });
 }
 
 // ---------------------------------------------------------------------- squat
 
-/** Upright, arms forward as a counterbalance. */
-const STAND_SQUAT: Pose = {
+const STAND: Pose = {
   head: [12, 6],
   shoulder: [12, 12],
   elbow: [15, 14],
   hand: [18, 15],
   hip: [12, 18],
   knee: [12, 23],
-  ankle: [12, 27],
+  ankle: [12, 26],
   toe: [16, 28],
   heel: [9, 28],
 };
 
-/**
- * Bottom of the squat: hips driven back behind the heels, knees forward, chest
- * over the thighs. The offset between hip and knee is the pose's signature.
- */
+/** Hips driven back behind the heels, knees forward, chest over the thighs. */
 const DEEP_SQUAT: Pose = {
   head: [14, 11],
   shoulder: [13, 16],
@@ -51,26 +75,30 @@ const DEEP_SQUAT: Pose = {
   hand: [21, 17],
   hip: [8, 21],
   knee: [16, 23],
-  ankle: [12, 27],
+  ankle: [12, 26],
   toe: [16, 28],
   heel: [9, 28],
 };
 
-export const squat: Sprite = makeSprite(PALETTE, [
-  frame(STAND_SQUAT, (g) => arrow(g, 25, 20, 'down')),
-  frame(DEEP_SQUAT, (g) => arrow(g, 25, 16, 'up')),
-]);
+// Steps are "Stand up" then "Sit back down", so the strip runs deep -> tall
+// -> deep and the animation matches the words on both halves of the rep.
+export const squat: Sprite = makeSprite(
+  PALETTE,
+  strip([STAND, DEEP_SQUAT], (step) =>
+    step === 0 ? { x: 25, y: 18, dir: 'up' } : { x: 25, y: 14, dir: 'down' },
+  ),
+);
 
 // ---------------------------------------------------------------------- lunge
 
-const STAND_LUNGE: Pose = {
+const STAND_ARMS_DOWN: Pose = {
   head: [12, 6],
   shoulder: [12, 12],
   elbow: [13, 16],
   hand: [13, 20],
   hip: [12, 18],
   knee: [12, 23],
-  ankle: [12, 27],
+  ankle: [12, 26],
   toe: [16, 28],
   heel: [9, 28],
 };
@@ -83,34 +111,26 @@ const DEEP_LUNGE: Pose = {
   hand: [14, 21],
   hip: [13, 19],
   knee: [20, 22],
-  ankle: [20, 27],
+  ankle: [20, 26],
   toe: [24, 28],
   heel: [17, 28],
-  backKnee: [7, 26],
+  backKnee: [7, 25],
   backAnkle: [4, 27],
   backToe: [2, 28],
 };
 
-export const lunge: Sprite = makeSprite(PALETTE, [frame(STAND_LUNGE), frame(DEEP_LUNGE)]);
+export const lunge: Sprite = makeSprite(
+  PALETTE,
+  strip([DEEP_LUNGE, STAND_ARMS_DOWN], (step) =>
+    step === 0 ? { x: 27, y: 14, dir: 'down' } : { x: 27, y: 12, dir: 'up' },
+  ),
+);
 
 // ----------------------------------------------------------------------- calf
 
-const CALF_DOWN: Pose = {
-  head: [12, 6],
-  shoulder: [12, 12],
-  elbow: [13, 16],
-  hand: [13, 20],
-  hip: [12, 18],
-  knee: [12, 23],
-  ankle: [12, 26],
-  toe: [16, 28],
-  heel: [9, 28],
-};
+const CALF_DOWN: Pose = { ...STAND_ARMS_DOWN };
 
-/**
- * Up on the toes. The whole figure rises two pixels *and* the heel swings clear
- * of the floor — the gap under the heel is what makes the movement readable.
- */
+/** Heel swings clear of the floor — the gap under it carries the movement. */
 const CALF_UP: Pose = {
   head: [12, 4],
   shoulder: [12, 10],
@@ -123,14 +143,15 @@ const CALF_UP: Pose = {
   heel: [9, 25],
 };
 
-export const calf: Sprite = makeSprite(PALETTE, [
-  frame(CALF_DOWN),
-  frame(CALF_UP, (g) => arrow(g, 22, 12, 'up')),
-]);
+export const calf: Sprite = makeSprite(
+  PALETTE,
+  strip([CALF_UP, CALF_DOWN], (step) =>
+    step === 0 ? { x: 22, y: 10, dir: 'up' } : { x: 22, y: 8, dir: 'down' },
+  ),
+);
 
 // --------------------------------------------------------------------- pushup
 
-/** Body in a straight line from heels to head, arm extended to the floor. */
 const PUSHUP_UP: Pose = {
   head: [7, 15],
   shoulder: [11, 17],
@@ -154,14 +175,15 @@ const PUSHUP_DOWN: Pose = {
   toe: [29, 28],
 };
 
-export const pushup: Sprite = makeSprite(PALETTE, [
-  frame(PUSHUP_UP, (g) => arrow(g, 16, 12, 'down')),
-  frame(PUSHUP_DOWN, (g) => arrow(g, 16, 14, 'up')),
-]);
+export const pushup: Sprite = makeSprite(
+  PALETTE,
+  strip([PUSHUP_DOWN, PUSHUP_UP], (step) =>
+    step === 0 ? { x: 17, y: 11, dir: 'down' } : { x: 17, y: 9, dir: 'up' },
+  ),
+);
 
 // ---------------------------------------------------------------------- plank
 
-/** Held on the forearms, body dead straight. */
 const PLANK: Pose = {
   head: [7, 19],
   shoulder: [11, 20],
@@ -173,14 +195,25 @@ const PLANK: Pose = {
   toe: [29, 28],
 };
 
-export const plank: Sprite = makeSprite(PALETTE, [
-  frame(PLANK),
-  // A plank pulses; it does not travel. The core lights up rather than the
-  // body moving, because animating movement here would teach the exercise wrong.
-  frame(PLANK, (g) => {
-    for (let x = 13; x <= 20; x++) {
-      g[19]![x] = 'y';
-      g[20]![x] = 'y';
+/** Sagging hips — what the hold is trying to stop you doing. */
+const PLANK_SAG: Pose = { ...PLANK, hip: [21, 23], knee: [26, 24] };
+
+/**
+ * Three steps: get into position, hold, release. The middle block lights the
+ * core rather than moving, because a plank that visibly travels teaches the
+ * exercise wrong.
+ */
+export const plank: Sprite = makeSprite(
+  PALETTE,
+  framesFromPoses([PLANK_SAG, PLANK, PLANK], FRAMES_PER_STEP, (pose, step) => {
+    const grid = drawPose(pose);
+    ground(grid);
+    if (step === 1) {
+      for (let x = 13; x <= 20; x++) {
+        grid[19]![x] = 'y';
+        grid[20]![x] = 'y';
+      }
     }
+    return toRows(grid);
   }),
-]);
+);

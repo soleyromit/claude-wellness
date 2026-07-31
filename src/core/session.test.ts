@@ -148,6 +148,57 @@ describe('frameFor', () => {
   });
 });
 
+describe('every activity shows the right picture for the words', () => {
+  /**
+   * The bug this exists to prevent: several stretches had five instruction
+   * steps and a two-frame sprite, so playback cycled 0,1,0,1,0 and step three
+   * displayed the pose for step one. The art contradicted the caption, which
+   * makes an exercise impossible to follow however detailed it is.
+   */
+  it.each(ACTIVITIES.filter((a) => !a.instant).map((a) => [a.id] as const))('%s', (id) => {
+    const activity = getActivity(id)!;
+    const plan = buildPlan(activity);
+    const frames = getSprite(activity.sprite).frames.length;
+
+    const seen = new Map<number, Set<number>>();
+    for (const entry of plan.entries.filter((e) => e.rep === 0)) {
+      const mid = (entry.startMs + entry.endMs) / 2;
+      const frame = frameFor(plan, sessionStateAt(plan, mid), frames, mid);
+      if (!seen.has(entry.stepIndex)) seen.set(entry.stepIndex, new Set());
+      seen.get(entry.stepIndex)!.add(frame);
+    }
+
+    // Every step must land on art of its own, never reuse another step's.
+    const used = [...seen.values()].flatMap((s) => [...s]);
+    expect(new Set(used).size, `${id} reuses art across steps`).toBe(used.length);
+  });
+
+  it.each(
+    ACTIVITIES.filter((a) => a.framesPerStep).map((a) => [a.id] as const),
+  )('%s has enough frames for all its steps', (id) => {
+    const activity = getActivity(id)!;
+    const frames = getSprite(activity.sprite).frames.length;
+    expect(frames).toBe(activity.steps.length * activity.framesPerStep!);
+  });
+
+  it('animates within a step rather than snapping to a static pose', () => {
+    // The in-between frames are the part you actually copy.
+    const activity = getActivity('exercise-squats')!;
+    const plan = buildPlan(activity);
+    const frames = getSprite(activity.sprite).frames.length;
+    const step = plan.entries[0]!;
+
+    const early = frameFor(plan, sessionStateAt(plan, step.startMs), frames, step.startMs);
+    const late = frameFor(
+      plan,
+      sessionStateAt(plan, step.endMs - 1),
+      frames,
+      step.endMs - 1,
+    );
+    expect(late).toBeGreaterThan(early);
+  });
+});
+
 describe('breathing sprites stay in step with their instructions', () => {
   it('shows a different frame at the start and end of every breathing step', () => {
     for (const id of ['breathe-box', 'breathe-sigh']) {

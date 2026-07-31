@@ -153,3 +153,72 @@ export function arrow(grid: Grid, x: number, y: number, dir: 'up' | 'down'): voi
 export function toRows(grid: Grid): string[] {
   return grid.map((row) => row.join(''));
 }
+
+// ---------------------------------------------------------------- animation
+
+function lerpPoint(a: Point, b: Point, t: number): Point {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+/** Ease in and out, so a movement accelerates and settles rather than sliding. */
+export function ease(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Blend two poses.
+ *
+ * Joint-based poses make this nearly free, and it is what turns a pair of
+ * static positions into an instruction you can follow: you see the *path* the
+ * body takes, not just where it starts and stops.
+ */
+export function lerpPose(a: Pose, b: Pose, t: number): Pose {
+  const pick = (key: 'backKnee' | 'backAnkle' | 'backToe' | 'heel'): Point | undefined => {
+    const pa = a[key];
+    const pb = b[key];
+    if (pa && pb) return lerpPoint(pa, pb, t);
+    return pb ?? pa;
+  };
+
+  return {
+    head: lerpPoint(a.head, b.head, t),
+    shoulder: lerpPoint(a.shoulder, b.shoulder, t),
+    elbow: lerpPoint(a.elbow, b.elbow, t),
+    hand: lerpPoint(a.hand, b.hand, t),
+    hip: lerpPoint(a.hip, b.hip, t),
+    knee: lerpPoint(a.knee, b.knee, t),
+    ankle: lerpPoint(a.ankle, b.ankle, t),
+    toe: lerpPoint(a.toe, b.toe, t),
+    heel: pick('heel'),
+    backKnee: pick('backKnee'),
+    backAnkle: pick('backAnkle'),
+    backToe: pick('backToe'),
+  };
+}
+
+/**
+ * Turn one key pose per instruction step into an animated strip.
+ *
+ * Each step gets `framesPerStep` frames: the first half eases out of the
+ * previous pose into this one, the second half holds it. That gives you both
+ * halves of an instruction — the movement to make, and the position to stay in
+ * — which a single static frame per step cannot.
+ */
+export function framesFromPoses(
+  poses: readonly Pose[],
+  framesPerStep: number,
+  render: (pose: Pose, step: number, t: number) => string[],
+): string[][] {
+  const frames: string[][] = [];
+
+  poses.forEach((pose, step) => {
+    const from = step === 0 ? poses[poses.length - 1]! : poses[step - 1]!;
+    for (let i = 0; i < framesPerStep; i++) {
+      // Reach the pose by the halfway point, then hold it.
+      const raw = Math.min(1, (i / Math.max(1, framesPerStep - 1)) * 2);
+      frames.push(render(lerpPose(from, pose, ease(raw)), step, raw));
+    }
+  });
+
+  return frames;
+}

@@ -72,6 +72,17 @@ export interface Activity {
    * where a held pose is the correct thing to display.
    */
   readonly smoothSprite?: boolean;
+  /**
+   * Frames of sprite art dedicated to each instruction step.
+   *
+   * When set, the sprite carries `steps.length * framesPerStep` frames and
+   * playback maps a step directly onto its own block of them, easing into the
+   * pose and then holding it. This is what guarantees the picture matches the
+   * words: with a bare frame-per-step cycle, an activity with five steps and a
+   * two-frame sprite shows frames 0,1,0,1,0 — so step three displays the pose
+   * for step one, and the instruction becomes impossible to follow.
+   */
+  readonly framesPerStep?: number;
 }
 
 /** What happened to an activity, appended to the log. */

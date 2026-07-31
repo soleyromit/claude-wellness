@@ -1,443 +1,225 @@
 /**
- * Stretch poses.
+ * Stretch poses, one key pose per instruction step, animated between them.
  *
- * Each sprite animates between two frames — the two ends of the movement —
- * which is exactly what a stretch demo needs: you can see where to start and
- * where to finish. The silhouettes are deliberately distinct so you can tell
- * which stretch it is at a glance without reading the title.
+ * The old version was the source of the worst problem in the app: several
+ * stretches had five instruction steps and a two-frame sprite, so playback
+ * cycled 0,1,0,1,0 and step three showed the pose for step one. The picture
+ * actively contradicted the words, which makes a stretch impossible to follow
+ * no matter how detailed the art is.
+ *
+ * Every stretch here has exactly one pose per step, and the figure eases
+ * between them so you see the movement rather than just its endpoints.
  */
 
 import type { Sprite } from '../render/pixel.js';
 import { PALETTE } from './palette.js';
-import { makeSprite, rowBuilder } from './make.js';
+import { makeSprite } from './make.js';
+import {
+  blankFigure,
+  drawPose,
+  framesFromPoses,
+  ground,
+  limb,
+  plot,
+  toRows,
+  type Pose,
+} from './figure.js';
+import { FRAMES_PER_STEP } from './exercises.js';
 
-const r = rowBuilder(24);
-const _ = '........................';
+function strip(poses: readonly Pose[], decorate?: (grid: string[][], step: number) => void): string[][] {
+  return framesFromPoses(poses, FRAMES_PER_STEP, (pose, step) => {
+    const grid = drawPose(pose);
+    ground(grid);
+    decorate?.(grid, step);
+    return toRows(grid);
+  });
+}
+
+/** Neutral standing figure every stretch departs from. */
+const BASE: Pose = {
+  head: [12, 6],
+  shoulder: [12, 12],
+  elbow: [13, 16],
+  hand: [13, 20],
+  hip: [12, 18],
+  knee: [12, 23],
+  ankle: [12, 26],
+  toe: [16, 28],
+  heel: [9, 28],
+};
+
+const arm = (elbow: [number, number], hand: [number, number]): Pose => ({
+  ...BASE,
+  elbow,
+  hand,
+});
+
+// -------------------------------------------------------------------- wrists
 
 /**
- * Cat-cow, drawn as one animal on all fours whose spine curves between frames.
- *
- * The head, hands, knees and floor stay in exactly the same place; only the
- * back moves. Authoring the two poses independently is what produced the
- * original broken version — the frames landed in different parts of the canvas
- * and the animation read as a jump cut rather than a spine arching.
- *
- * `spine` gives the top edge of the torso for each of the twelve body columns,
- * as an offset downward. A hump in the middle is cat; a dip is cow.
+ * Five steps, five arm positions. The forearm angle and hand height carry the
+ * difference — palm up is held low with the arm extended, palm down comes up
+ * and in, the fist draws back toward the shoulder.
  */
-function allFours(
-  spine: readonly number[],
-  headRows: readonly string[],
-  headTop: number,
-): string[] {
-  const rows = new Array<string>(24).fill(_);
-  const BODY_X = 8;
-  const TOP = 10;
-  const BELLY = 17;
-
-  // Build the torso column by column so the back is a continuous curve.
-  const grid: string[][] = Array.from({ length: 24 }, () => new Array<string>(24).fill('.'));
-  spine.forEach((offset, i) => {
-    const x = BODY_X + i;
-    const top = TOP + offset;
-    for (let y = top; y <= BELLY; y++) {
-      grid[y]![x] = y === top ? 'C' : 'c';
-    }
-  });
-
-  for (let y = 0; y < 24; y++) rows[y] = grid[y]!.join('');
-
-  // Head sits at the left, and the neck bridges it to the shoulders. The head
-  // has to ride with the front of the spine: when the back arches, the
-  // shoulders lift away and a fixed head would be left floating.
-  headRows.forEach((line, i) => {
-    rows[headTop + i] = mergeRow(rows[headTop + i]!, line);
-  });
-  rows[headTop + 4] = mergeRow(rows[headTop + 4]!, r([5, 'sss']));
-  rows[headTop + 5] = mergeRow(rows[headTop + 5]!, r([5, 'SSS']));
-
-  // Front and back legs drop to a shared floor.
-  for (let y = BELLY + 1; y <= 19; y++) {
-    rows[y] = mergeRow(rows[y]!, r([9, 'pp'], [17, 'pp']));
-  }
-  rows[20] = mergeRow(rows[20]!, r([8, 'oooo'], [16, 'oooo']));
-  rows[21] = r([4, 'aaaaaaaaaaaaaaaa']);
-
-  return rows;
-}
-
-/** Overlay non-transparent pixels of `over` onto `base`. */
-function mergeRow(base: string, over: string): string {
-  const cells = [...base];
-  for (let i = 0; i < over.length && i < cells.length; i++) {
-    if (over[i] !== '.') cells[i] = over[i]!;
-  }
-  return cells.join('');
-}
-
-export const wrists: Sprite = makeSprite(PALETTE, [
-  // Palm up, fingers pulled back.
-  [
-    '........................',
-    '........................',
-    '.........hhhhhh.........',
-    '........hhhhhhhh........',
-    '........hssssssh........',
-    '........hsossosh........',
-    '........hssssssh........',
-    '.........ssssss.........',
-    '..........SSSS..........',
-    '.......cccccccccc.......',
-    '......cccccccccccc......',
-    '......ccccccccccccssss..',
-    '......cccccccccccssssss.',
-    '......ccccccccccc.sSss..',
-    '......s.cccccccc........',
-    '......s.cccccccc........',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-  // Palm down, fingers pulled toward you.
-  [
-    '........................',
-    '........................',
-    '.........hhhhhh.........',
-    '........hhhhhhhh........',
-    '........hssssssh........',
-    '........hsossosh........',
-    '........hssssssh........',
-    '.........ssssss.........',
-    '..........SSSS..........',
-    '.......cccccccccc.......',
-    '......cccccccccccc......',
-    '......cccccccccccc......',
-    '......ccccccccccccssss..',
-    '......cccccccccccssssss.',
-    '......s.cccccccc..sSss..',
-    '......s.cccccccc........',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-]);
-
-export const neck: Sprite = makeSprite(PALETTE, [
-  // Ear toward the right shoulder.
-  [
-    '........................',
-    '........................',
-    '..........hhhhhh........',
-    '.........hhhhhhhh.......',
-    '........hsssssssh.......',
-    '........ssssssosh.......',
-    '........hsssssssh.......',
-    '..........ssssss........',
-    '...........SSSS.........',
-    '.......cccccccccc.......',
-    '......cccccccccccc......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......s.cccccccc.s......',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-  // Ear toward the left shoulder.
-  [
-    '........................',
-    '........................',
-    '........hhhhhh..........',
-    '.......hhhhhhhh.........',
-    '.......hsssssssh........',
-    '.......hsossssss........',
-    '.......hsssssssh........',
-    '........ssssss..........',
-    '.........SSSS...........',
-    '.......cccccccccc.......',
-    '......cccccccccccc......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......s.cccccccc.s......',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-]);
-
-export const shoulders: Sprite = makeSprite(PALETTE, [
-  // Shoulders down, relaxed.
-  [
-    '........................',
-    '........................',
-    '.........hhhhhh.........',
-    '........hhhhhhhh........',
-    '........hssssssh........',
-    '........hsossosh........',
-    '........hssssssh........',
-    '.........ssssss.........',
-    '..........SSSS..........',
-    '.......cccccccccc.......',
-    '......cccccccccccc......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......s.cccccccc.s......',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-  // Shrugged up to the ears.
-  [
-    '........................',
-    '........................',
-    '.........hhhhhh.........',
-    '........hhhhhhhh........',
-    '........hssssssh........',
-    '........hsossosh........',
-    '.yyy....hssssssh....yyy.',
-    '......c..ssssss..c......',
-    '.....ccc..SSSS..ccc.....',
-    '.....cccccccccccccc.....',
-    '......cccccccccccc......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......sccccccccccs......',
-    '......s.cccccccc.s......',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-]);
-
-export const chest: Sprite = makeSprite(PALETTE, [
-  // Hands clasped behind the back, arms low.
-  [
-    '........................',
-    '........................',
-    '.........hhhhhh.........',
-    '........hhhhhhhh........',
-    '........hssssssh........',
-    '........hsossosh........',
-    '........hssssssh........',
-    '.........ssssss.........',
-    '..........SSSS..........',
-    '.......cccccccccc.......',
-    '......cccccccccccc......',
-    '.....CccccccccccccC.....',
-    '.....CccccccccccccC.....',
-    '.....CccccccccccccC.....',
-    '......ssccccccccss......',
-    '.......ssssssssss.......',
-    '........pppppppp........',
-    '........pppppppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '........ppp..ppp........',
-    '.......ooo...ooo........',
-    '........................',
-  ],
-  // Arms swept up and back, chest open, chin lifted. Each arm is a continuous
-  // diagonal from the shoulder outward — the earlier version scattered
-  // detached pixels either side of the torso, which read as speckle.
-  [
-    _,
-    r([2, 'yy'], [20, 'yy']),
-    r([9, 'hhhhhh']),
-    r([8, 'hhhhhhhh']),
-    r([8, 'hssssssh']),
-    r([8, 'hsSSSSsh']),
-    r([2, 'ss'], [8, 'hssssssh'], [20, 'ss']),
-    r([3, 'ss'], [9, 'ssssss'], [19, 'ss']),
-    r([4, 'ss'], [10, 'SSSS'], [18, 'ss']),
-    r([5, 'ss'], [7, 'cccccccccc'], [17, 'ss']),
-    r([6, 'Cccccccccccc']),
-    r([6, 'cccccccccccc']),
-    r([6, 'cccccccccccc']),
-    r([7, 'cccccccccc']),
-    r([8, 'cccccccc']),
-    r([8, 'CCCCCCCC']),
-    // Hips down match frame 0 exactly, so the chest opens without the whole
-    // figure bobbing up and down.
-    r([8, 'pppppppp']),
-    r([8, 'pppppppp']),
-    r([8, 'ppp'], [13, 'ppp']),
-    r([8, 'ppp'], [13, 'ppp']),
-    r([8, 'ppp'], [13, 'ppp']),
-    r([8, 'ppp'], [13, 'ppp']),
-    r([7, 'ooo'], [13, 'ooo']),
-    _,
-  ],
-]);
-
-export const twist: Sprite = makeSprite(PALETTE, [
-  // Seated, twisted to the right.
-  [
-    '........................',
-    '........................',
-    '..........hhhhhh........',
-    '.........hhhhhhhh.......',
-    '........hsssssssh.......',
-    '........ssssssosh.......',
-    '........hsssssssh.......',
-    '..........ssssss........',
-    '...........SSSS.........',
-    '........cccccccccc......',
-    '.......cccccccccccc.....',
-    '.....ssccccccccccccss...',
-    '....sss.ccccccccc..ss...',
-    '........cccccccc........',
-    '........pppppppp........',
-    '......pppppppppppp......',
-    '......ppppppppppppppp...',
-    '......PPPPPPPPPPPPPPP...',
-    '......ppp...............',
-    '......ppp...............',
-    '......ppp...............',
-    '......ppp...............',
-    '.....ooooo..............',
-    '........................',
-  ],
-  // Seated, twisted to the left.
-  [
-    '........................',
-    '........................',
-    '........hhhhhh..........',
-    '.......hhhhhhhh.........',
-    '.......hsssssssh........',
-    '.......hsossssss........',
-    '.......hsssssssh........',
-    '........ssssss..........',
-    '.........SSSS...........',
-    '......cccccccccc........',
-    '.....cccccccccccc.......',
-    '...ssccccccccccccss.....',
-    '...ss..ccccccccc.sss....',
-    '........cccccccc........',
-    '........pppppppp........',
-    '......pppppppppppp......',
-    '...ppppppppppppppp......',
-    '...PPPPPPPPPPPPPPP......',
-    '...............ppp......',
-    '...............ppp......',
-    '...............ppp......',
-    '...............ppp......',
-    '..............ooooo.....',
-    '........................',
-  ],
-]);
-
-export const catcow: Sprite = makeSprite(PALETTE, [
-  // Cow: back sags, chest opens, head lifts.
-  allFours(
-    [1, 2, 3, 4, 4, 4, 4, 4, 3, 2, 1, 1],
-    [r([1, 'hhhhh']), r([0, 'hhhhhhh']), r([0, 'hsossh']), r([0, 'hssssh'])],
-    8,
+export const wrists: Sprite = makeSprite(
+  PALETTE,
+  strip(
+    [
+      arm([16, 14], [21, 15]), // arm out, palm up, fingers pulled back
+      arm([16, 15], [21, 12]), // palm down, fingers pulled toward you
+      arm([15, 14], [19, 10]), // spread wide, then fist
+      arm([8, 14], [3, 15]), // other hand, palm up
+      arm([8, 15], [3, 12]), // other hand, palm down
+    ],
+    (grid, step) => {
+      // A small mark at the fingertips shows which way to pull.
+      const tip: [number, number] = step >= 3 ? [2, 13] : [22, 13];
+      plot(grid, tip[0], tip[1], 'y');
+      plot(grid, tip[0], tip[1] + 1, 'y');
+    },
   ),
-  // Cat: spine rounds up and the chin tucks down toward the chest.
-  allFours(
-    [4, 3, 1, 0, 0, 0, 0, 0, 1, 2, 3, 4],
-    [r([2, 'hhhhh']), r([1, 'hhhhhh']), r([1, 'hssssh']), r([1, 'hsooss'])],
-    10,
-  ),
-]);
+);
+
+// ---------------------------------------------------------------------- neck
+
+const tiltHead = (dx: number, dy: number): Pose => ({
+  ...BASE,
+  head: [12 + dx, 6 + dy],
+});
+
+export const neck: Sprite = makeSprite(
+  PALETTE,
+  strip([
+    tiltHead(3, 1), // ear toward right shoulder
+    tiltHead(0, 2), // chin down to chest
+    tiltHead(-3, 1), // ear toward left shoulder
+    tiltHead(0, 0), // slow half-circle back to centre
+  ]),
+);
+
+// ----------------------------------------------------------------- shoulders
+
+export const shoulders: Sprite = makeSprite(
+  PALETTE,
+  strip([
+    { ...BASE, shoulder: [12, 10], elbow: [13, 14], hand: [13, 18] }, // lifted to the ears
+    BASE, // dropped and released
+  ]),
+);
+
+// --------------------------------------------------------------------- chest
+
+export const chest: Sprite = makeSprite(
+  PALETTE,
+  strip([
+    { ...BASE, elbow: [9, 17], hand: [7, 20] }, // hands clasped behind
+    { ...BASE, head: [13, 5], shoulder: [12, 11], elbow: [7, 15], hand: [4, 12] }, // lifted, chest open
+    BASE, // released
+  ]),
+);
+
+// --------------------------------------------------------------------- twist
+
+/** Seated: hips low and fixed, only the upper body rotates. */
+const SEATED: Pose = {
+  head: [12, 8],
+  shoulder: [12, 14],
+  elbow: [13, 17],
+  hand: [13, 20],
+  hip: [12, 20],
+  knee: [19, 21],
+  ankle: [19, 26],
+  toe: [23, 28],
+  heel: [16, 28],
+};
+
+export const twist: Sprite = makeSprite(
+  PALETTE,
+  strip([
+    SEATED, // sit tall, feet flat
+    { ...SEATED, head: [14, 8], shoulder: [14, 14], elbow: [18, 16], hand: [20, 18] }, // twist right
+    SEATED, // back to centre
+    { ...SEATED, head: [10, 8], shoulder: [10, 14], elbow: [6, 16], hand: [4, 18] }, // twist left
+  ]),
+);
+
+// ------------------------------------------------------------------- cat-cow
+
+/** On all fours: hips and shoulders fixed, the spine between them moves. */
+const ALL_FOURS: Pose = {
+  head: [7, 16],
+  shoulder: [11, 18],
+  elbow: [10, 22],
+  hand: [10, 27],
+  hip: [21, 18],
+  knee: [24, 22],
+  ankle: [24, 27],
+  toe: [27, 28],
+};
+
+export const catcow: Sprite = makeSprite(
+  PALETTE,
+  strip([
+    // Cow: chest drops, head lifts.
+    { ...ALL_FOURS, head: [6, 13], shoulder: [11, 20] },
+    // Cat: spine rounds up, chin tucks under.
+    { ...ALL_FOURS, head: [9, 19], shoulder: [11, 15] },
+  ]),
+);
+
+// -------------------------------------------------------------------- ankles
 
 /**
- * Ankle circles: a lower leg with the foot rotating around a fixed ankle.
+ * Ankle circles, drawn as a close-up of one lower leg.
  *
- * The leg, the ankle joint and the faint arc are identical in every frame, so
- * the only thing that moves is the foot. The previous version mirrored a pair
- * of decorative arcs while leaving the foot itself untouched, which meant the
- * one thing the animation existed to demonstrate — rotation — never happened.
+ * A seated whole-body figure puts the foot at four or five pixels, which is far
+ * too small to show rotation — the one thing this exercise is. Cropping to the
+ * shin and foot gives the movement the whole canvas, and the foot sweeps
+ * through a real arc rather than snapping between positions.
  */
-function ankle(foot: readonly (readonly [y: number, x: number, pixels: string])[]): string[] {
-  const rows = new Array<string>(24).fill(_);
+function ankleFrame(angleDeg: number, mirrored: boolean): string[] {
+  const grid = blankFigure();
+  const ANKLE: [number, number] = [16, 19];
+  const rad = (angleDeg * Math.PI) / 180;
+  const dir = mirrored ? -1 : 1;
 
-  // Shin, fixed in every frame.
-  for (let y = 2; y <= 8; y++) rows[y] = r([8, 'pppppppp']);
-  rows[9] = r([8, 'PPPPPPPP']);
-  for (let y = 10; y <= 13; y++) rows[y] = r([9, 'ssssss']);
-  rows[14] = r([9, 'sSSSSs']);
-  // Ankle joint — the pivot everything else turns around.
-  rows[15] = r([9, 'ssssss']);
+  // Shin, fixed in every frame so only the foot appears to move.
+  limb(grid, [16, 3], [16, 12], 7, 'p');
+  limb(grid, [16, 12], ANKLE, 5, 's');
 
-  // Faint arc showing the path of the toe.
-  rows[12] = mergeRow(rows[12]!, r([19, 'y']));
-  rows[14] = mergeRow(rows[14]!, r([21, 'y']));
-  rows[17] = mergeRow(rows[17]!, r([22, 'y']));
-  rows[20] = mergeRow(rows[20]!, r([21, 'y']));
-  rows[22] = mergeRow(rows[22]!, r([18, 'y']));
+  // Foot: a limb from the ankle out to the toe, plus a short heel behind it.
+  const toe: [number, number] = [
+    ANKLE[0] + dir * 8 * Math.cos(rad),
+    ANKLE[1] + 8 * Math.sin(rad),
+  ];
+  const heel: [number, number] = [
+    ANKLE[0] - dir * 3.5 * Math.cos(rad - 0.5),
+    ANKLE[1] - 3.5 * Math.sin(rad - 0.5),
+  ];
+  limb(grid, ANKLE, toe, 4, 's');
+  limb(grid, ANKLE, heel, 3, 'S');
 
-  for (const [y, x, pixels] of foot) {
-    rows[y] = mergeRow(rows[y]!, r([x, pixels]));
+  // Faint arc tracing the path the toe travels.
+  for (let a = -70; a <= 110; a += 15) {
+    const r = (a * Math.PI) / 180;
+    plot(grid, ANKLE[0] + dir * 11 * Math.cos(r), ANKLE[1] + 11 * Math.sin(r), 'y');
   }
 
-  return rows;
+  ground(grid, 30);
+  return toRows(grid);
 }
 
-export const ankles: Sprite = makeSprite(PALETTE, [
-  // Toe pointed down.
-  ankle([
-    [16, 9, 'ssssss'],
-    [17, 11, 'sssss'],
-    [18, 13, 'ssss'],
-    [19, 14, 'oooo'],
-  ]),
-  // Foot flat, pointing forward.
-  ankle([
-    [16, 9, 'ssssssss'],
-    [17, 9, 'sssssssss'],
-    [18, 9, 'ooooooooo'],
-  ]),
-  // Toe lifted.
-  ankle([
-    [13, 16, 'sss'],
-    [14, 14, 'ssss'],
-    [15, 11, 'sssss'],
-    [16, 9, 'sssssss'],
-    [17, 9, 'oooooo'],
-  ]),
-  // Back through flat, so the loop reads as a circle rather than a flick.
-  ankle([
-    [16, 9, 'ssssssss'],
-    [17, 9, 'sssssssss'],
-    [18, 9, 'ooooooooo'],
-  ]),
-]);
+/** Four steps: each foot rotates one way, then the other. */
+export const ankles: Sprite = makeSprite(
+  PALETTE,
+  [
+    { from: -70, to: 110, mirrored: false },
+    { from: 110, to: -70, mirrored: false },
+    { from: -70, to: 110, mirrored: true },
+    { from: 110, to: -70, mirrored: true },
+  ].flatMap(({ from, to, mirrored }) =>
+    Array.from({ length: FRAMES_PER_STEP }, (_, i) =>
+      ankleFrame(from + ((to - from) * i) / (FRAMES_PER_STEP - 1), mirrored),
+    ),
+  ),
+);

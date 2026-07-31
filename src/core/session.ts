@@ -128,6 +128,16 @@ export function frameFor(
     return Math.min(frameCount - 1, Math.floor(progress * frameCount));
   }
 
+  // Each step owns a block of frames: ease into the pose, then hold it. Driving
+  // the block from the step index keeps art and instruction locked together
+  // regardless of how long each step runs.
+  const perStep = plan.activity.framesPerStep;
+  if (perStep && perStep > 0) {
+    const base = state.entry.stepIndex * perStep;
+    const within = Math.min(perStep - 1, Math.floor(state.stepProgress * perStep));
+    return Math.min(frameCount - 1, base + within);
+  }
+
   return state.entry.stepIndex % frameCount;
 }
 
