@@ -276,6 +276,29 @@ export function selectableActivities(
   });
 }
 
+/**
+ * Every activity that exists, whether or not it is part of the routine.
+ *
+ * The picker shows all of them: switching an activity off should mean "stop
+ * reminding me", not "hide it from me". You may still want to do a posture
+ * check on a day your back hurts without turning the reminders back on.
+ * `isAutomatic` distinguishes the two.
+ */
+export function allActivities(config: Config): Activity[] {
+  const rank = (a: Activity): number => (isAutomatic(config, a) ? 0 : 1);
+  return [...ACTIVITIES].sort((a, b) => {
+    // Routine activities first, so the list leads with what you actually use.
+    const byAuto = rank(a) - rank(b);
+    if (byAuto !== 0) return byAuto;
+    return ACTIVITY_GROUPS.indexOf(a.group) - ACTIVITY_GROUPS.indexOf(b.group);
+  });
+}
+
+/** Whether this activity will be reminded about on its own. */
+export function isAutomatic(config: Config, activity: Activity): boolean {
+  return config.groups[activity.group].enabled && config.activities[activity.id] !== false;
+}
+
 /** Whether an activity's group is currently past due — shown in the picker. */
 export function isDue(
   events: readonly LogEvent[],

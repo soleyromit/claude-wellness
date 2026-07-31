@@ -188,96 +188,100 @@ describe('Picker', () => {
     getActivity('exercise-squats')!,
     getActivity('exercise-plank')!,
     getActivity('stretch-wrists')!,
-    getActivity('breathe-box')!,
+    getActivity('posture-check')!,
   ];
   const due = new Set(['exercise-squats']);
+  // Posture is off the routine by default: startable, but never reminded.
+  const auto = new Set(['exercise-squats', 'exercise-plank', 'stretch-wrists']);
 
   const props = {
     activities,
     dueIds: due,
-    column: 'groups' as const,
+    autoIds: auto,
+    column: 'activities' as const,
     groupIndex: 0,
     activityIndex: 0,
     tier: 'full' as const,
   };
 
-  it('groups activities so the list never grows with the catalogue', () => {
-    const grouped = groupActivities(activities, due);
-    expect(grouped.map((g) => g.group)).toEqual(['exercise', 'stretch', 'breathing']);
+  it('groups activities so the grid never grows with the catalogue', () => {
+    const grouped = groupActivities(activities, due, auto);
+    expect(grouped.map((g) => g.group)).toEqual(['exercise', 'stretch', 'posture']);
     expect(grouped[0]!.activities).toHaveLength(2);
   });
 
-  it('counts what is due in each group', () => {
-    const grouped = groupActivities(activities, due);
+  it('counts what is due and what is automatic per group', () => {
+    const grouped = groupActivities(activities, due, auto);
     expect(grouped[0]!.dueCount).toBe(1);
-    expect(grouped[1]!.dueCount).toBe(0);
+    expect(grouped[0]!.autoCount).toBe(2);
+    expect(grouped[2]!.autoCount).toBe(0);
   });
 
-  it('shows every group as a tab, with a count of what is due', () => {
+  it('shows every group as a tab', () => {
     const out = plain(render(<Picker {...props} />).lastFrame());
     expect(out).toContain('Exercise');
     expect(out).toContain('Stretch');
-    expect(out).toContain('Breathing');
-    // The due count rides on the tab itself.
-    expect(out).toMatch(/Exercise 1/);
+    expect(out).toContain('Posture');
   });
 
   it("shows the selected group's activities and no others", () => {
     const out = plain(render(<Picker {...props} />).lastFrame());
-    expect(out).toContain('Sit-to-stand squats');
+    expect(out).toContain('Squats');
     expect(out).toContain('Plank');
-    expect(out).not.toContain('Wrist & finger stretch');
+    expect(out).not.toContain('Wrists');
   });
 
   it('follows the group selection', () => {
     const out = plain(render(<Picker {...props} groupIndex={1} />).lastFrame());
-    expect(out).toContain('Wrist & finger stretch');
-    expect(out).not.toContain('Sit-to-stand squats');
+    expect(out).toContain('Wrists');
+    expect(out).not.toContain('Squats');
   });
 
-  it('marks the selection with a filled band rather than a caret', () => {
-    // A caret is easy to lose in a narrow pane; a background fill is not.
-    const frame = render(<Picker {...props} column="activities" />).lastFrame() ?? '';
-    // Some background-colour escape is present, whichever form Ink emits.
-    expect(frame).toMatch(/\[4[0-8][;m]/);
-    expect(plain(frame)).not.toContain('❯');
-  });
-
-  it('dims the selection in the column that is not focused', () => {
-    const onTabs = render(<Picker {...props} />).lastFrame() ?? '';
-    const onList = render(<Picker {...props} column="activities" />).lastFrame() ?? '';
-    // Same rows, different emphasis, so it is clear which column arrows drive.
-    expect(onTabs).not.toBe(onList);
-  });
-
-  it('previews the highlighted activity before you commit to it', () => {
+  it('gives every tile its own art', () => {
+    // Each tile renders a downscaled sprite, so half-block glyphs appear
+    // whether or not anything is selected.
     const out = plain(render(<Picker {...props} />).lastFrame());
     expect(out).toContain('▀');
-    expect(out).toContain('chair you are already in');
   });
 
-  it('previews whatever the selection moves to', () => {
-    const out = plain(render(<Picker {...props} groupIndex={2} />).lastFrame());
-    expect(out).toContain('marker around the box');
+  it('says which activities are reminded automatically', () => {
+    const onRoutine = plain(render(<Picker {...props} />).lastFrame());
+    expect(onRoutine).toContain('auto');
+
+    // Posture is off the routine — still listed, marked manual.
+    const manual = plain(render(<Picker {...props} groupIndex={2} />).lastFrame());
+    expect(manual).toContain('Posture');
+    expect(manual).toContain('manual');
   });
 
-  it('drops the preview rather than squeezing the columns in a narrow pane', () => {
-    const out = plain(render(<Picker {...props} tier="compact" />).lastFrame());
-    expect(out).toContain('Exercise');
-    expect(out).toContain('Sit-to-stand squats');
-    expect(out).not.toContain('▀');
+  it('summarises how much of the catalogue is on the routine', () => {
+    const out = plain(render(<Picker {...props} />).lastFrame());
+    expect(out).toContain('3 auto');
+    expect(out).toContain('1 manual');
   });
 
-  it('keeps tabs and list usable in the narrowest pane', () => {
-    const out = plain(render(<Picker {...props} tier="minimal" />).lastFrame());
-    expect(out).toContain('Exercise');
-    expect(out).toContain('Sit-to-stand squats');
-    expect(out).not.toContain('▀');
+  it('flags what is due now', () => {
+    expect(plain(render(<Picker {...props} />).lastFrame())).toContain('due now');
+  });
+
+  it('marks the selected tile with a filled band', () => {
+    const frame = render(<Picker {...props} />).lastFrame() ?? '';
+    expect(frame).toMatch(/\[4[0-8][;m]/);
+  });
+
+  it('narrows the grid rather than shrinking the tiles', () => {
+    // The art stops meaning anything below a certain size, so fewer columns is
+    // the right trade in a narrow pane.
+    for (const tier of ['full', 'compact', 'minimal'] as const) {
+      const out = plain(render(<Picker {...props} tier={tier} />).lastFrame());
+      expect(out, tier).toContain('Squats');
+      expect(out, tier).toContain('▀');
+    }
   });
 
   it('explains how to fix an empty routine', () => {
     const out = plain(
-      render(<Picker {...props} activities={[]} dueIds={new Set()} />).lastFrame(),
+      render(<Picker {...props} activities={[]} dueIds={new Set()} autoIds={new Set()} />).lastFrame(),
     );
     expect(out).toContain('wellness config');
   });

@@ -2,20 +2,16 @@
  * Choose an activity yourself.
  *
  * Groups run across the top as tabs; the selected group's activities fill a
- * list below, with a preview of the highlighted one beside it.
+ * grid of tiles below, each showing its own art.
  *
- * Two decisions carry the layout:
+ * A tile grid rather than a list because a text row is one terminal line, which
+ * is two pixels of height — nowhere near enough for a picture. Tiles give every
+ * item a visual at a size where it still reads, and fit more of them in the
+ * same space than a list plus one large preview did.
  *
- *  - **Tabs, not a column.** Three side-by-side columns of text ate the width
- *    of a side pane and left the activity titles cramped. Groups are short and
- *    there are few of them, so a row costs one line and gives the list its
- *    width back.
- *  - **Selection is a filled band, not a caret.** A `❯` is easy to lose in a
- *    narrow pane seen from the corner of your eye. A full-width highlight is
- *    what every terminal list does, and it is legible at a glance.
- *
- * The visible list stays one group's worth however many activities exist in
- * total, which is the point of grouping at all.
+ * Every activity appears, including ones switched out of the routine: turning
+ * something off should mean "stop reminding me", not "hide it from me". A mark
+ * distinguishes what gets reminded automatically from what is yours to start.
  */
 
 import React from 'react';
@@ -32,6 +28,8 @@ export type PickerColumn = 'groups' | 'activities';
 export interface PickerProps {
   readonly activities: readonly Activity[];
   readonly dueIds: ReadonlySet<string>;
+  /** Activities the scheduler will remind you about on its own. */
+  readonly autoIds: ReadonlySet<string>;
   readonly column: PickerColumn;
   readonly groupIndex: number;
   readonly activityIndex: number;
@@ -42,15 +40,13 @@ export interface GroupEntry {
   readonly group: ActivityGroup;
   readonly activities: readonly Activity[];
   readonly dueCount: number;
+  readonly autoCount: number;
 }
 
-/**
- * Bucket the flat list into groups, keeping the order the scheduler produced
- * so the most overdue group stays first.
- */
 export function groupActivities(
   activities: readonly Activity[],
   dueIds: ReadonlySet<string>,
+  autoIds: ReadonlySet<string> = new Set(),
 ): GroupEntry[] {
   const order: ActivityGroup[] = [];
   const byGroup = new Map<ActivityGroup, Activity[]>();
@@ -69,13 +65,15 @@ export function groupActivities(
       group,
       activities: list,
       dueCount: list.filter((a) => dueIds.has(a.id)).length,
+      autoCount: list.filter((a) => autoIds.has(a.id)).length,
     };
   });
 }
 
-const WINDOW = 7;
+/** Sprite pixels per tile. 16 is eight terminal rows — small but still legible. */
+const TILE_PX = 16;
+const TILE_WIDTH = TILE_PX + 2;
 
-/** A group tab. Selected tabs are filled; the rest are quiet. */
 function Tab({
   entry,
   selected,
@@ -86,6 +84,8 @@ function Tab({
   focused: boolean;
 }): React.ReactElement {
   const colour = GROUP_COLORS[entry.group];
+  // A group with nothing on the routine is dimmed, not hidden.
+  const off = entry.autoCount === 0;
   const label = `${GROUP_GLYPHS[entry.group]} ${GROUP_LABELS[entry.group]}${
     entry.dueCount > 0 ? ` ${entry.dueCount}` : ''
   }`;
@@ -94,7 +94,7 @@ function Tab({
     <Box marginRight={1}>
       <Text
         backgroundColor={selected ? (focused ? COLORS.selection : COLORS.selectionMuted) : undefined}
-        color={selected ? colour : COLORS.faint}
+        color={selected ? (off ? COLORS.dim : colour) : COLORS.faint}
         bold={selected}
       >
         {` ${label} `}
@@ -103,15 +103,52 @@ function Tab({
   );
 }
 
+/** One activity: its art, its name, and whether it is part of the routine. */
+function Tile({
+  activity,
+  selected,
+  due,
+  auto,
+}: {
+  activity: Activity;
+  selected: boolean;
+  due: boolean;
+  auto: boolean;
+}): React.ReactElement {
+  const sprite = getSprite(activity.sprite);
+  const factor = Math.max(1, Math.round(sprite.height / TILE_PX));
+  const thumb = React.useMemo(() => downscale(sprite, factor), [sprite, factor]);
+
+  return (
+    <Box flexDirection="column" marginRight={1}>
+      {/* Only the selected tile animates. Every tile moving at once turns the
+          menu into a wall of motion you cannot read. */}
+      <Sprite sprite={thumb} frame={selected ? undefined : 0} frameMs={160} />
+
+      <Text
+        backgroundColor={selected ? COLORS.selection : undefined}
+        color={selected ? COLORS.text : auto ? COLORS.dim : COLORS.faint}
+        bold={selected}
+      >
+        {fit(` ${activity.short ?? activity.title}`, TILE_WIDTH)}
+      </Text>
+      <Text color={due ? COLORS.warn : COLORS.faint}>
+        {fit(due ? ' ▲ due now' : auto ? ' ◷ auto' : ' · manual', TILE_WIDTH)}
+      </Text>
+    </Box>
+  );
+}
+
 export function Picker({
   activities,
   dueIds,
+  autoIds,
   column,
   groupIndex,
   activityIndex,
   tier,
 }: PickerProps): React.ReactElement {
-  const groups = groupActivities(activities, dueIds);
+  const groups = groupActivities(activities, dueIds, autoIds);
 
   if (groups.length === 0) {
     return (
@@ -120,9 +157,7 @@ export function Picker({
           pick something
         </Text>
         <Box marginTop={1}>
-          <Text color={COLORS.dim}>
-            Nothing is enabled. Run `wellness config` to switch something on.
-          </Text>
+          <Text color={COLORS.dim}>Nothing to show. Run `wellness config`.</Text>
         </Box>
       </Box>
     );
@@ -132,19 +167,16 @@ export function Picker({
   const inGroup = groupEntry.activities;
   const activeIndex = Math.min(activityIndex, inGroup.length - 1);
   const selected = inGroup[activeIndex]!;
-  const preview = React.useMemo(() => {
-    const sprite = getSprite(selected.sprite);
-    return sprite.height > 32 ? downscale(sprite, 2) : sprite;
-  }, [selected.sprite]);
 
-  const showPreview = tier === 'full';
-  // Wide enough for the longest title ("Wrist & finger stretch") without
-  // clipping. The preview is halved, so there is room for both.
-  const listWidth = showPreview ? 30 : tier === 'compact' ? 32 : 26;
+  // Narrow panes drop to fewer tiles per row rather than shrinking them below
+  // the size at which the art means anything.
+  const perRow = tier === 'full' ? 3 : tier === 'compact' ? 2 : 1;
+  const rows: Activity[][] = [];
+  for (let i = 0; i < inGroup.length; i += perRow) {
+    rows.push(inGroup.slice(i, i + perRow));
+  }
 
-  const start = Math.max(0, Math.min(activeIndex - Math.floor(WINDOW / 2), inGroup.length - WINDOW));
-  const offset = Math.max(0, start);
-  const visible = inGroup.slice(offset, offset + WINDOW);
+  const autoCount = activities.filter((a) => autoIds.has(a.id)).length;
 
   return (
     <Box flexDirection="column">
@@ -154,11 +186,10 @@ export function Picker({
         </Text>
         <Text color={COLORS.faint}>
           {'   '}
-          {activities.length} available
+          {autoCount} auto · {activities.length - autoCount} manual
         </Text>
       </Box>
 
-      {/* Group tabs. Wrapping keeps them usable in a narrow pane. */}
       <Box marginTop={1} flexWrap="wrap">
         {groups.map((entry, i) => (
           <Tab
@@ -170,72 +201,33 @@ export function Picker({
         ))}
       </Box>
 
-      <Box marginTop={1}>
-        <Box flexDirection="column" marginRight={showPreview ? 2 : 0}>
-          {visible.map((activity, i) => {
-            const index = offset + i;
-            const active = index === activeIndex;
-            const focused = active && column === 'activities';
-            const due = dueIds.has(activity.id);
-            const label = fit(` ${activity.title}`, listWidth - 4);
-
-            return (
-              <Box key={activity.id}>
-                <Text
-                  backgroundColor={
-                    active ? (focused ? COLORS.selection : COLORS.selectionMuted) : undefined
-                  }
-                  color={active ? COLORS.text : COLORS.dim}
-                  bold={focused}
-                >
-                  {label}
-                </Text>
-                <Text
-                  backgroundColor={
-                    active ? (focused ? COLORS.selection : COLORS.selectionMuted) : undefined
-                  }
-                  color={due ? COLORS.warn : COLORS.faint}
-                >
-                  {fit(due ? 'due' : '', 4)}
-                </Text>
-              </Box>
-            );
-          })}
-
-          {inGroup.length > WINDOW && (
-            <Text color={COLORS.faint}> +{inGroup.length - WINDOW} more</Text>
-          )}
-        </Box>
-
-        {showPreview && (
-          <Box
-            borderStyle="round"
-            borderColor={COLORS.rule}
-            paddingX={1}
-            flexDirection="column"
-            alignItems="center"
-          >
-            {/* Halved: a full-size figure is twenty-four rows and swamps the
-                list it is meant to illustrate. Keyed on the activity so the
-                animation restarts when the selection moves. */}
-            <Sprite key={selected.id} sprite={preview} frameMs={140} />
+      <Box marginTop={1} flexDirection="column">
+        {rows.map((row, r) => (
+          <Box key={r}>
+            {row.map((activity, c) => (
+              <Tile
+                key={activity.id}
+                activity={activity}
+                selected={r * perRow + c === activeIndex && column === 'activities'}
+                due={dueIds.has(activity.id)}
+                auto={autoIds.has(activity.id)}
+              />
+            ))}
           </Box>
-        )}
+        ))}
       </Box>
 
-      {tier !== 'minimal' && (
-        <Box marginTop={1}>
-          <Text color={COLORS.dim} wrap="wrap">
-            {selected.cue}
-          </Text>
-        </Box>
-      )}
+      <Box marginTop={1}>
+        <Text color={COLORS.dim} wrap="wrap">
+          {selected.cue}
+        </Text>
+      </Box>
 
       <Box marginTop={1}>
         <Text color={COLORS.faint}>
           {column === 'groups'
-            ? '←→ group   ↓ activities   [enter] start   [esc] back'
-            : '↑↓ choose   ↑ groups   [enter] start   [esc] back'}
+            ? '←→ group   ↓ pick   [enter] start   [esc] back'
+            : '←→↑↓ move   [enter] start   [esc] back'}
         </Text>
       </Box>
     </Box>

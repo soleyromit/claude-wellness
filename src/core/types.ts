@@ -47,6 +47,11 @@ export interface Activity {
   readonly group: ActivityGroup;
   /** Nudge headline, e.g. "Wrist & finger stretch". */
   readonly title: string;
+  /**
+   * Short label for tight layouts like the picker's tiles, where the full
+   * title would truncate to "Sit-to-stand squa…". Falls back to `title`.
+   */
+  readonly short?: string;
   /** One-line motivation shown under the title. */
   readonly cue: string;
   /** Key into the sprite registry. */

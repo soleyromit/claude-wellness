@@ -22,7 +22,14 @@ import {
   totalXp,
 } from '../core/progress.js';
 import { buildPlan, nextStepStart, sessionStateAt, type SessionPlan } from '../core/session.js';
-import { decide, isDue, nextDueIn, selectableActivities } from '../core/scheduler.js';
+import {
+  allActivities,
+  decide,
+  isAutomatic,
+  isDue,
+  nextDueIn,
+  selectableActivities,
+} from '../core/scheduler.js';
 import type { Activity, ClaudeState, Config, LogEvent } from '../core/types.js';
 import { ClaudeSignal } from '../claude/signal.js';
 import { appendEvent, loadLog } from '../store/log.js';
@@ -144,9 +151,12 @@ export function App({ env }: AppProps): React.ReactElement {
 
   // Recomputed on the slow dashboard tick, which is plenty — the ordering only
   // changes as groups fall due.
-  const selectable = useMemo(
-    () => selectableActivities(events, config, now, sessionStart),
-    [events, config, now, sessionStart],
+  // The picker lists everything; `autoIds` says which are on the routine.
+  // Switching an activity off means "stop reminding me", not "hide it".
+  const selectable = useMemo(() => allActivities(config), [config]);
+  const autoIds = useMemo(
+    () => new Set(selectable.filter((a) => isAutomatic(config, a)).map((a) => a.id)),
+    [selectable, config],
   );
   const dueIds = useMemo(
     () =>
@@ -287,33 +297,47 @@ export function App({ env }: AppProps): React.ReactElement {
         return;
       }
 
-      // Groups are tabs across the top, so they move horizontally; the list
-      // below moves vertically. Matching the keys to the layout means you never
-      // have to remember which axis a column uses.
-      const horizontal =
-        key.rightArrow || input === 'l' ? 1 : key.leftArrow || input === 'h' ? -1 : 0;
-      if (horizontal !== 0) {
-        const next = (groupIndex + horizontal + groups.length) % groups.length;
-        setScreen({ ...screen, column: 'groups', groupIndex: next, activityIndex: 0 });
-        return;
-      }
+      // Tabs move horizontally; the tile grid moves in both axes. Left and
+      // right walk the grid, wrapping onto the tabs at the very start.
+      const perRow = tier === 'full' ? 3 : tier === 'compact' ? 2 : 1;
 
-      const vertical = key.downArrow || input === 'j' ? 1 : key.upArrow || input === 'k' ? -1 : 0;
-      if (vertical !== 0) {
-        if (screen.column === 'groups') {
-          // Down drops into the list; up from the tabs has nowhere to go.
-          if (vertical > 0) setScreen({ ...screen, column: 'activities', activityIndex: 0 });
+      if (screen.column === 'groups') {
+        const horizontal =
+          key.rightArrow || input === 'l' ? 1 : key.leftArrow || input === 'h' ? -1 : 0;
+        if (horizontal !== 0) {
+          const next = (groupIndex + horizontal + groups.length) % groups.length;
+          setScreen({ ...screen, groupIndex: next, activityIndex: 0 });
           return;
         }
-        // Up off the top of the list returns to the tabs, so the two are one
-        // continuous space rather than separate modes.
-        if (vertical < 0 && activityIndex === 0) {
-          setScreen({ ...screen, column: 'groups' });
+        if (key.downArrow || input === 'j') {
+          setScreen({ ...screen, column: 'activities', activityIndex: 0 });
           return;
         }
-        const next = Math.max(0, Math.min(inGroup.length - 1, activityIndex + vertical));
-        setScreen({ ...screen, groupIndex, activityIndex: next });
-        return;
+      } else {
+        const delta =
+          key.rightArrow || input === 'l'
+            ? 1
+            : key.leftArrow || input === 'h'
+              ? -1
+              : key.downArrow || input === 'j'
+                ? perRow
+                : key.upArrow || input === 'k'
+                  ? -perRow
+                  : 0;
+
+        if (delta !== 0) {
+          const next = activityIndex + delta;
+          // Stepping off the top of the grid returns to the tabs, so the two
+          // read as one space rather than separate modes.
+          if (next < 0) {
+            setScreen({ ...screen, column: 'groups' });
+            return;
+          }
+          if (next < inGroup.length) {
+            setScreen({ ...screen, groupIndex, activityIndex: next });
+          }
+          return;
+        }
       }
 
       if (key.tab) {
@@ -438,6 +462,7 @@ export function App({ env }: AppProps): React.ReactElement {
         <Picker
           activities={selectable}
           dueIds={dueIds}
+          autoIds={autoIds}
           column={screen.column}
           groupIndex={screen.groupIndex}
           activityIndex={screen.activityIndex}

@@ -85,13 +85,14 @@ you can drop and do push-ups right now depends on things it can't see.
 
 - On a nudge, **`tab`** swaps the offer for something else. The counter shows
   where you are in the list, and alternatives from the same group come first.
-- On the dashboard, **`p`** opens the picker: groups on the left with what's due
-  in each, that group's activities beside them, and a live preview of whatever
-  you're on. `↑↓` moves, `←→` switches column, `enter` starts.
+- On the dashboard, **`p`** opens the picker: groups as tabs, then a grid of
+  tiles — each with its own art, so you can see what an activity is rather than
+  reading its name. `←→↑↓` moves, `enter` starts.
 
-  Grouping keeps the visible list to one group's worth however many activities
-  exist in total, and answers "what stretches are there?" without reading past
-  everything else.
+  Every activity is listed, including ones you've switched off. Turning
+  something off means "stop reminding me", not "hide it from me": tiles are
+  marked **auto** when the scheduler will remind you, **manual** when it's
+  yours to start, and **due now** when it's waiting.
 
 ## Commands
 
@@ -169,7 +170,7 @@ Art is authored in 24-bit colour and degrades to 256 or 16 colours automatically
 
 ```sh
 npm install
-npm test          # 530 tests
+npm test          # 531 tests
 npm run build
 ```
 
