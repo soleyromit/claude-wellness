@@ -85,9 +85,10 @@ export function taperedLimb(
     const half = (thickA + (thickB - thickA) * t - 1) / 2;
 
     for (let d = -half; d <= half; d += 0.5) {
-      // Shade the trailing edge of the limb, which is what gives it roundness
-      // rather than reading as a flat ribbon.
-      const useShade = shade && d > half - 1.2;
+      // Shade the trailing third, proportionally. A fixed-width shadow band
+      // eats most of a thin limb — at three pixels across it left the shins
+      // almost entirely in shadow, so the legs read as dark slabs.
+      const useShade = shade && d > half * 0.4;
       if (vertical) plot(grid, x + d, y, useShade ? shade : tone);
       else plot(grid, x, y + d, useShade ? shade : tone);
     }
@@ -208,20 +209,25 @@ function hand(grid: Grid, centre: Point, towards: Point): void {
 }
 
 /** Shoe: upper, sole and heel block. */
-function shoe(grid: Grid, ankle: Point, toe: Point, heel: Point | undefined): void {
-  taperedLimb(grid, ankle, toe, 5, 3, 'P');
-  if (heel) taperedLimb(grid, ankle, heel, 5, 4, 'P');
+/** Shorten a vector to at most `max`, keeping its direction. */
+function clampReach(from: Point, to: Point, max: number): Point {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const len = Math.hypot(dx, dy);
+  if (len <= max || len === 0) return to;
+  return [from[0] + (dx / len) * max, from[1] + (dy / len) * max];
+}
 
-  // Sole runs under the whole foot.
-  const sole = (a: Point, b: Point): void => {
-    const steps = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]), 1) * 2;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      plot(grid, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t + 2, 'o');
-    }
-  };
-  sole(ankle, toe);
-  if (heel) sole(ankle, heel);
+function shoe(grid: Grid, ankle: Point, toe: Point, heel: Point | undefined): void {
+  // Slim, and short. Feet were authored on a narrower grid, so scaling their
+  // reach with the rest of the body gave a ten-pixel foot on a thirty-seven
+  // pixel figure — a quarter of its height, and the loudest thing in the
+  // silhouette. Clamping here fixes every pose at once, and keeps the
+  // *direction* the pose asked for, which is what a calf raise depends on.
+  taperedLimb(grid, ankle, clampReach(ankle, toe, 5), 3, 2, 'P');
+  if (heel) taperedLimb(grid, ankle, clampReach(ankle, heel, 3), 3, 2, 'P');
+  // The outline pass supplies the sole; drawing one as well doubled the dark
+  // mass under the figure.
 }
 
 /** Elbow and knee definition — a shadow crease where the limb bends. */
@@ -334,11 +340,19 @@ export function drawPose(pose: Pose, options: { outline?: boolean } = {}): Grid 
   const grid = blankFigure();
   const facing = pose.facing ?? 1;
 
-  // Far leg and arm, in shadow so they sit behind.
+  // Far leg, in shadow so it sits behind.
   if (pose.backKnee && pose.backAnkle) {
     taperedLimb(grid, pose.hip, pose.backKnee, 9, 7, 'P');
     taperedLimb(grid, pose.backKnee, pose.backAnkle, 7, 5, 'P');
     if (pose.backToe) taperedLimb(grid, pose.backAnkle, pose.backToe, 4, 3, 'k');
+  } else {
+    // Legs together: offset a shadowed copy so two legs are visible. Drawn as
+    // a single mass they read as one thick trunk, which is most of why a
+    // standing side view fails to look like a person.
+    const back = (p: Point): Point => [p[0] - facing * 2.5, p[1]];
+    taperedLimb(grid, back(pose.hip), back(pose.knee), 9, 6, 'P');
+    taperedLimb(grid, back(pose.knee), back(pose.ankle), 6, 4, 'P');
+    shoe(grid, back(pose.ankle), back(pose.toe), pose.heel ? back(pose.heel) : undefined);
   }
   taperedLimb(grid, pose.shoulder, pose.elbow, 6, 5, 'C');
 
@@ -379,7 +393,8 @@ export function drawPose(pose: Pose, options: { outline?: boolean } = {}): Grid 
   );
 
   // Neck, then head over everything.
-  taperedLimb(grid, pose.head, pose.shoulder, 6, 8, 's', 'S');
+  // Neck: narrow at the skull, flaring into the shoulders.
+  taperedLimb(grid, pose.head, pose.shoulder, 4, 8, 's', 'S');
   head(grid, pose.head, facing);
 
   keepLargestBody(grid);
@@ -494,10 +509,16 @@ export function framesFromPoses(
  * believable length against a head that is now radius 3.
  */
 function stretchY(y: number): number {
-  // Landmarks on the authoring grid: head 6, shoulder 12, hip 18, knee 23,
-  // ankle 26, floor 28.
+  // Authoring landmarks -> final canvas rows. These are absolute, not a scale
+  // factor, because the gaps between them are the anatomy and each has to be
+  // set against the size of the parts that fill it.
+  //
+  // The head is radius 3 with hair above, so its centre sits six rows clear of
+  // the shoulder: three for the skull, three for a neck. Deriving this from a
+  // uniform scale instead gave a ten-row gap and produced seven rows of bare
+  // neck — a figure whose head simply merged into its torso.
   const from = [0, 6, 12, 18, 23, 26, 28, 32];
-  const to = [0, 6, 13, 21, 26, 29, 30, 33];
+  const to = [2, 13, 19, 29, 36, 42, 44, 47];
 
   for (let i = 0; i < from.length - 1; i++) {
     if (y <= from[i + 1]!) {
@@ -513,8 +534,8 @@ function stretchY(y: number): number {
  * Map a pose authored on the 32 grid onto the 48 canvas, correcting its
  * proportions on the way.
  */
-export function scalePose(pose: Pose, factor = 1.4, offsetY = 2): Pose {
-  const s = (p: Point): Point => [p[0] * factor, stretchY(p[1]) * factor + offsetY];
+export function scalePose(pose: Pose, factor = 1.4, offsetY = 4): Pose {
+  const s = (p: Point): Point => [p[0] * factor + offsetY, stretchY(p[1])];
   const opt = (p: Point | undefined): Point | undefined => (p ? s(p) : undefined);
   return {
     head: s(pose.head),
