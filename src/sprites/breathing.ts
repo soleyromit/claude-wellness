@@ -135,6 +135,9 @@ export const boxBreath: Sprite = makeSprite(
 
     return boxFrame(Math.round(half), phase + t);
   }),
+  // Already drawn with its own tones; the automatic edge pass would only
+  // muddy a geometric shape.
+  { shade: false },
 );
 
 /**

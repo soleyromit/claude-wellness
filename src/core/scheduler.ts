@@ -236,6 +236,58 @@ export function decide(input: DecideInput): Decision {
 }
 
 /**
+ * Every activity the user could choose right now, in a sensible order.
+ *
+ * The scheduler picking *for* you is right for a nudge — it should not make you
+ * decide anything when you are mid-task. But it is wrong as the only option:
+ * some activities need floor space and some don't, and which you can do changes
+ * minute to minute. This is the list behind "give me a different one".
+ *
+ * Ordered by how overdue each activity's group is, so the most useful choices
+ * come first, with `preferGroup` pulled to the front when cycling within the
+ * group you were just offered.
+ */
+export function selectableActivities(
+  events: readonly LogEvent[],
+  config: Config,
+  now: number,
+  sessionStart: number,
+  preferGroup?: ActivityGroup,
+): Activity[] {
+  const groupRank = new Map<ActivityGroup, number>();
+  for (const group of ACTIVITY_GROUPS) {
+    if (!config.groups[group].enabled) continue;
+    const over = overdueMinutes(events, config, group, now, sessionStart);
+    // Not-yet-due groups still belong on the list; they just rank below due ones.
+    groupRank.set(group, over ?? -Number.MAX_SAFE_INTEGER);
+  }
+
+  return ACTIVITIES.filter(
+    (a) => groupRank.has(a.group) && config.activities[a.id] !== false,
+  ).sort((a, b) => {
+    if (preferGroup) {
+      const aPref = a.group === preferGroup ? 0 : 1;
+      const bPref = b.group === preferGroup ? 0 : 1;
+      if (aPref !== bPref) return aPref - bPref;
+    }
+    const rank = groupRank.get(b.group)! - groupRank.get(a.group)!;
+    if (rank !== 0) return rank;
+    return a.title.localeCompare(b.title);
+  });
+}
+
+/** Whether an activity's group is currently past due — shown in the picker. */
+export function isDue(
+  events: readonly LogEvent[],
+  config: Config,
+  activity: Activity,
+  now: number,
+  sessionStart: number,
+): boolean {
+  return overdueMinutes(events, config, activity.group, now, sessionStart) !== null;
+}
+
+/**
  * Minutes until the next group comes due, for the dashboard's "next up" line.
  * Null when nothing is scheduled.
  */

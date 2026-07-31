@@ -1,6 +1,6 @@
 {
   "name": "claude-wellness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A pixel-art wellness companion for your terminal — stretch, hydrate and move while Claude Code chews on a prompt.",
   "author": "Romit Soley",
   "license": "MIT",

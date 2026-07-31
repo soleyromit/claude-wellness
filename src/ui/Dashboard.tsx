@@ -100,8 +100,8 @@ export function Dashboard({
       <Box marginTop={1}>
         <Text color={COLORS.faint}>
           {tier === 'minimal'
-            ? '[w] water  [n] now  [q] quit'
-            : '[w] log water   [n] do one now   [q] quit'}
+            ? '[w] water  [p] pick  [q] quit'
+            : '[w] log water   [p] pick something   [q] quit'}
         </Text>
       </Box>
     </Box>

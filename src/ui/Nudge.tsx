@@ -20,10 +20,20 @@ export interface NudgeProps {
   readonly tier: Tier;
   /** Cups logged today, shown when the activity is a hydration one. */
   readonly instantProgress?: { done: number; goal: number };
+  /** How many activities you can Tab between, and where you are in them. */
+  readonly alternativeCount?: number;
+  readonly alternativeIndex?: number;
 }
 
-export function Nudge({ activity, tier, instantProgress }: NudgeProps): React.ReactElement {
+export function Nudge({
+  activity,
+  tier,
+  instantProgress,
+  alternativeCount = 1,
+  alternativeIndex = 0,
+}: NudgeProps): React.ReactElement {
   const color = GROUP_COLORS[activity.group];
+  const canSwap = alternativeCount > 1;
 
   return (
     <Box flexDirection="column">
@@ -31,6 +41,12 @@ export function Nudge({ activity, tier, instantProgress }: NudgeProps): React.Re
         <Text bold color={color}>
           ▶ {activity.title}
         </Text>
+        {canSwap && (
+          <Text color={COLORS.faint}>
+            {'  '}
+            {alternativeIndex + 1}/{alternativeCount}
+          </Text>
+        )}
       </Box>
 
       {tier !== 'minimal' && (
@@ -60,12 +76,17 @@ export function Nudge({ activity, tier, instantProgress }: NudgeProps): React.Re
         </Box>
       )}
 
-      <Box marginTop={1}>
+      <Box marginTop={1} flexDirection="column">
         <Text color={COLORS.faint} wrap="wrap">
           {activity.instant
             ? '[space] log it   [s] snooze   [d] not today'
             : '[enter] start   [s] snooze   [d] not today'}
         </Text>
+        {canSwap && (
+          <Text color={COLORS.faint} wrap="wrap">
+            [tab] something else
+          </Text>
+        )}
       </Box>
     </Box>
   );

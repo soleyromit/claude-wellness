@@ -87,7 +87,15 @@ describe('sprite registry', () => {
  * deliberately separate marks, so they're excluded — the point of this check is
  * that the *figure* holds together.
  */
-const FIGURE_PIXELS = new Set(['s', 'S', 'h', 'H', 'c', 'C', 'p', 'P']);
+const FIGURE_PIXELS = new Set([
+  // Every tone of every body material, including the highlights and shadows
+  // added by the automatic shading pass — otherwise a lit edge pixel reads as
+  // a hole and splits an intact figure in two.
+  '1', 's', 'S', '2', // skin
+  '3', 'h', 'H', // hair
+  '4', 'c', 'C', '5', // shirt
+  '6', 'p', 'P', // trousers
+]);
 
 /** Count 4-connected regions of figure pixels in a frame. */
 function figureComponents(frame: readonly string[]): number {
@@ -158,10 +166,26 @@ describe('pet sprites', () => {
     expect(new Set(rendered).size).toBe(4);
   });
 
-  it('keeps every mood 24x24', () => {
+  it('uses the larger 32x32 canvas', () => {
+    // The companion sits on the dashboard all day, so it gets more pixels to
+    // spend on shading than the activity sprites do.
     for (const sprite of Object.values(PET_SPRITES)) {
-      expect(sprite.width).toBe(24);
-      expect(sprite.height).toBe(24);
+      expect(sprite.width).toBe(32);
+      expect(sprite.height).toBe(32);
     }
+  });
+
+  it('gives each mood its own colour ramp, not just a darker green', () => {
+    // A wilted plant that is merely the healthy one darkened reads as unlit
+    // rather than unwell.
+    const tones = (mood: Parameters<typeof petSprite>[0]): Set<string> =>
+      new Set(petSprite(mood).frames[0]!.join('').split('').filter((c) => c !== '.'));
+
+    const healthy = tones('thriving');
+    const dead = tones('sad');
+    const shared = [...dead].filter((c) => healthy.has(c));
+    // Pot, soil, outline and eyes are shared; the plant body should not be.
+    expect(shared).not.toContain('n');
+    expect(shared).not.toContain('7');
   });
 });

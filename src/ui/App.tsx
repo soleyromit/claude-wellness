@@ -22,13 +22,14 @@ import {
   totalXp,
 } from '../core/progress.js';
 import { buildPlan, nextStepStart, sessionStateAt, type SessionPlan } from '../core/session.js';
-import { decide, nextDueIn, pickActivity } from '../core/scheduler.js';
+import { decide, isDue, nextDueIn, selectableActivities } from '../core/scheduler.js';
 import type { Activity, ClaudeState, Config, LogEvent } from '../core/types.js';
 import { ClaudeSignal } from '../claude/signal.js';
 import { appendEvent, loadLog } from '../store/log.js';
 import { loadConfig } from '../store/config.js';
 import { Dashboard } from './Dashboard.js';
 import { Nudge } from './Nudge.js';
+import { Picker } from './Picker.js';
 import { Session, SessionComplete } from './Session.js';
 import { COLORS, tierFor } from './theme.js';
 
@@ -45,7 +46,15 @@ const COMPLETE_SCREEN_MS = 2500;
 
 type Screen =
   | { readonly kind: 'dashboard' }
-  | { readonly kind: 'nudge'; readonly activity: Activity; readonly overdueMinutes: number }
+  | {
+      readonly kind: 'nudge';
+      readonly activity: Activity;
+      readonly overdueMinutes: number;
+      /** Alternatives you can Tab through, starting with what was offered. */
+      readonly alternatives: readonly Activity[];
+      readonly index: number;
+    }
+  | { readonly kind: 'picker'; readonly cursor: number }
   | { readonly kind: 'session'; readonly plan: SessionPlan; readonly startedAt: number }
   | { readonly kind: 'complete'; readonly title: string; readonly xp: number; readonly at: number };
 
@@ -127,6 +136,20 @@ export function App({ env }: AppProps): React.ReactElement {
     [events, config, now, sessionStart],
   );
 
+  // Recomputed on the slow dashboard tick, which is plenty — the ordering only
+  // changes as groups fall due.
+  const selectable = useMemo(
+    () => selectableActivities(events, config, now, sessionStart),
+    [events, config, now, sessionStart],
+  );
+  const dueIds = useMemo(
+    () =>
+      new Set(
+        selectable.filter((a) => isDue(events, config, a, now, sessionStart)).map((a) => a.id),
+      ),
+    [selectable, events, config, now, sessionStart],
+  );
+
   /** Start a guided session, or log an instant activity outright. */
   const start = useCallback(
     (activity: Activity) => {
@@ -161,10 +184,25 @@ export function App({ env }: AppProps): React.ReactElement {
     // Recording "shown" resets the group's clock, so a dismissed nudge doesn't
     // immediately re-fire on the next tick.
     record({ ts: Date.now(), type: 'shown', activity: decision.nudge.activity.id });
+
+    // Offer the scheduler's pick first, with the rest behind Tab. Alternatives
+    // are captured once, when the nudge appears, so cycling through them can't
+    // shift under you as the clock moves.
+    const offered = decision.nudge.activity;
+    const rest = selectableActivities(
+      events,
+      config,
+      now,
+      sessionStart,
+      decision.nudge.group,
+    ).filter((a) => a.id !== offered.id);
+
     setScreen({
       kind: 'nudge',
-      activity: decision.nudge.activity,
+      activity: offered,
       overdueMinutes: decision.nudge.overdueMinutes,
+      alternatives: [offered, ...rest],
+      index: 0,
     });
   }, [screen.kind, events, config, claude, now, sessionStart, record]);
 
@@ -208,8 +246,41 @@ export function App({ env }: AppProps): React.ReactElement {
       return;
     }
 
+    if (screen.kind === 'picker') {
+      const options = selectable;
+      if (key.escape || input === 'q') {
+        setScreen({ kind: 'dashboard' });
+        return;
+      }
+      if (key.upArrow || input === 'k') {
+        setScreen({ ...screen, cursor: (screen.cursor - 1 + options.length) % options.length });
+        return;
+      }
+      if (key.downArrow || input === 'j') {
+        setScreen({ ...screen, cursor: (screen.cursor + 1) % options.length });
+        return;
+      }
+      if (key.return) {
+        const chosen = options[screen.cursor];
+        if (chosen) start(chosen);
+      }
+      return;
+    }
+
     if (screen.kind === 'nudge') {
       const activity = screen.activity;
+
+      // Tab swaps the offer for a different activity rather than making you
+      // refuse it outright. Shift+Tab goes back the other way.
+      if (key.tab || key.rightArrow || key.leftArrow) {
+        const count = screen.alternatives.length;
+        if (count > 1) {
+          const step = key.leftArrow || key.shift ? -1 : 1;
+          const index = (screen.index + step + count) % count;
+          setScreen({ ...screen, index, activity: screen.alternatives[index]! });
+        }
+        return;
+      }
 
       if (key.return || (activity.instant && input === ' ')) {
         start(activity);
@@ -254,10 +325,9 @@ export function App({ env }: AppProps): React.ReactElement {
       }
       return;
     }
-    if (input === 'n') {
-      // "Do one now" — pull the next thing forward rather than waiting.
-      const target = upcoming ? pickActivity(events, config, upcoming.group) : null;
-      if (target) start(target);
+    if (input === 'n' || input === 'p') {
+      // Choose deliberately rather than accepting whatever is next in line.
+      if (selectable.length > 0) setScreen({ kind: 'picker', cursor: 0 });
     }
   });
 
@@ -283,11 +353,22 @@ export function App({ env }: AppProps): React.ReactElement {
           activity={screen.activity}
           overdueMinutes={screen.overdueMinutes}
           tier={tier}
+          alternativeCount={screen.alternatives.length}
+          alternativeIndex={screen.index}
           instantProgress={
             screen.activity.instant && hydrationRing
               ? { done: hydrationRing.done, goal: hydrationRing.goal }
               : undefined
           }
+        />
+      )}
+
+      {screen.kind === 'picker' && (
+        <Picker
+          activities={selectable}
+          dueIds={dueIds}
+          cursor={Math.min(screen.cursor, Math.max(0, selectable.length - 1))}
+          tier={tier}
         />
       )}
 

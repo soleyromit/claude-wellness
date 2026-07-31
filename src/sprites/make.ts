@@ -11,6 +11,11 @@ import type { Sprite } from '../render/pixel.js';
 
 export interface MakeOptions {
   readonly name?: string;
+  /**
+   * Apply automatic edge shading. On by default for figure art; turn it off
+   * for sprites that already carry their own hand-placed tones.
+   */
+  readonly shade?: boolean;
 }
 
 /** A run of pixels placed at an explicit column. */
@@ -48,14 +53,74 @@ export function rowBuilder(width: number): (...segments: Segment[]) => string {
   return (...segments) => row(width, ...segments);
 }
 
+/**
+ * Materials that get automatic edge shading: mid tone -> [highlight, shadow].
+ *
+ * Keyed by the flat character an artist writes; the pass replaces the first and
+ * last pixel of each horizontal run with the lit and shadowed tones.
+ */
+const SHADING: Readonly<Record<string, readonly [light: string, shade: string]>> = {
+  c: ['4', 'C'], // shirt
+  s: ['1', 'S'], // skin
+  p: ['6', 'P'], // trousers
+  h: ['3', 'H'], // hair
+  n: ['7', 'N'], // plant
+  m: ['9', 'M'], // terracotta
+  b: ['l', 'B'], // water
+};
+
+/** Runs shorter than this stay flat — shading a 2px limb just recolours it. */
+const MIN_RUN = 3;
+
+/**
+ * Add rim lighting to flat-coloured art.
+ *
+ * Sprites are authored in flat mid-tones because that is what is legible to
+ * write and edit by hand. Depth comes from this pass instead: every horizontal
+ * run of a material gets a lit pixel on the left and a shadowed one on the
+ * right, so light falls consistently from the upper left across every sprite
+ * without anyone hand-placing a single highlight.
+ *
+ * Doing it as a transform rather than in the source keeps the art editable —
+ * you still read and change flat shapes, not a mosaic of four near-identical
+ * characters.
+ */
+export function shadeFrames(frames: readonly (readonly string[])[]): string[][] {
+  return frames.map((frame) =>
+    frame.map((line) => {
+      const cells = [...line];
+      let x = 0;
+      while (x < cells.length) {
+        const ch = cells[x]!;
+        const ramp = SHADING[ch];
+        if (!ramp) {
+          x++;
+          continue;
+        }
+        let run = 1;
+        while (x + run < cells.length && cells[x + run] === ch) run++;
+        if (run >= MIN_RUN) {
+          cells[x] = ramp[0];
+          cells[x + run - 1] = ramp[1];
+        }
+        x += run;
+      }
+      return cells.join('');
+    }),
+  );
+}
+
 export function makeSprite(
   palette: Readonly<Record<string, string>>,
-  frames: readonly (readonly string[])[],
+  input: readonly (readonly string[])[],
   options: MakeOptions = {},
 ): Sprite {
   const label = options.name ? `Sprite "${options.name}"` : 'Sprite';
 
-  if (frames.length === 0) throw new Error(`${label} has no frames`);
+  if (input.length === 0) throw new Error(`${label} has no frames`);
+
+  // Shade before validating, so the validator checks what actually renders.
+  const frames = options.shade === false ? input : shadeFrames(input);
 
   const height = frames[0]!.length;
   const width = frames[0]![0]?.length ?? 0;

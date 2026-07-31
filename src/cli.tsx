@@ -40,7 +40,7 @@ const HELP = `
   working on a prompt, anything due surfaces there instead of interrupting you.
 `;
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 export function run(argv: readonly string[] = process.argv.slice(2)): void {
   const args = [...argv];

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { ACTIVITIES } from './activities.js';
 import { defaultConfig, setActivityEnabled, setGroupConfig } from '../store/config.js';
 import { addDays } from './progress.js';
 import {
   decide,
+  isDue,
+  selectableActivities,
   dismissedToday,
   inQuietHours,
   lastGroupActivityTs,
@@ -308,6 +311,73 @@ describe('decide', () => {
     const decision = decide(input({ sessionStart: NOW - 50 * MINUTE }));
     if (decision.kind !== 'nudge') throw new Error('expected a nudge');
     expect(decision.nudge.overdueMinutes).toBeCloseTo(5);
+  });
+});
+
+describe('selectableActivities', () => {
+  it('lists every activity in every enabled group', () => {
+    const all = selectableActivities([], defaultConfig(), NOW, NOW);
+    // Posture is off by default; everything else should be offered.
+    expect(all.some((a) => a.group === 'posture')).toBe(false);
+    expect(all.some((a) => a.group === 'hydration')).toBe(true);
+    expect(all.some((a) => a.group === 'exercise')).toBe(true);
+  });
+
+  it('excludes groups the user switched off', () => {
+    const all = selectableActivities([], hydrationOnly(), NOW, NOW);
+    expect(all.map((a) => a.group)).toEqual(['hydration']);
+  });
+
+  it('excludes individual activities removed from the pool', () => {
+    const config = setActivityEnabled(defaultConfig(), 'exercise-plank', false);
+    const all = selectableActivities([], config, NOW, NOW);
+    expect(all.some((a) => a.id === 'exercise-plank')).toBe(false);
+    expect(all.some((a) => a.id === 'exercise-squats')).toBe(true);
+  });
+
+  it('offers not-yet-due activities too, so you are never stuck', () => {
+    // Nothing is due a second after startup, but you should still be able to
+    // choose something deliberately.
+    expect(selectableActivities([], defaultConfig(), NOW, NOW).length).toBeGreaterThan(0);
+  });
+
+  it('ranks the most overdue group first', () => {
+    const events: LogEvent[] = [
+      { ts: NOW - 5 * MINUTE, type: 'completed', activity: 'water' },
+      { ts: NOW - 300 * MINUTE, type: 'completed', activity: 'eyes-blink' },
+    ];
+    const all = selectableActivities(events, defaultConfig(), NOW, NOW - 300 * MINUTE);
+    expect(all[0]!.group).toBe('eyes');
+  });
+
+  it('pulls a preferred group to the front when cycling within it', () => {
+    const all = selectableActivities([], defaultConfig(), NOW, NOW, 'breathing');
+    expect(all[0]!.group).toBe('breathing');
+    expect(all[1]!.group).toBe('breathing');
+  });
+
+  it('is empty when nothing at all is enabled', () => {
+    let config = hydrationOnly();
+    config = setGroupConfig(config, 'hydration', { enabled: false });
+    expect(selectableActivities([], config, NOW, NOW)).toEqual([]);
+  });
+
+  it('returns a stable order for the same inputs', () => {
+    const a = selectableActivities([], defaultConfig(), NOW, NOW).map((x) => x.id);
+    const b = selectableActivities([], defaultConfig(), NOW, NOW).map((x) => x.id);
+    expect(a).toEqual(b);
+  });
+});
+
+describe('isDue', () => {
+  it('is false before the interval elapses', () => {
+    const water = ACTIVITIES.find((a) => a.id === 'water')!;
+    expect(isDue([], hydrationOnly(), water, NOW, NOW)).toBe(false);
+  });
+
+  it('is true once the group is overdue', () => {
+    const water = ACTIVITIES.find((a) => a.id === 'water')!;
+    expect(isDue([], hydrationOnly(), water, NOW, NOW - 60 * MINUTE)).toBe(true);
   });
 });
 
