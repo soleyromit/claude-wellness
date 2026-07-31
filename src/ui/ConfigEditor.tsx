@@ -69,6 +69,16 @@ export function ConfigEditor({ env }: ConfigEditorProps): React.ReactElement {
       return;
     }
 
+    // A bell you can't silence is worse than no bell, so it gets a top-level
+    // key rather than being buried in the config file.
+    if (input === 'b') {
+      update({
+        ...config,
+        attention: { ...config.attention, bell: !config.attention.bell },
+      });
+      return;
+    }
+
     if (key.upArrow || input === 'k') {
       setCursor((c) => (c - 1 + rows.length) % rows.length);
       return;
@@ -188,9 +198,17 @@ export function ConfigEditor({ env }: ConfigEditorProps): React.ReactElement {
         })}
       </Box>
 
+      <Box marginTop={1}>
+        <Text color={COLORS.faint}>alert on nudge: </Text>
+        <Text color={config.attention.bell ? COLORS.success : COLORS.faint}>
+          {config.attention.bell ? 'bell on' : 'bell off'}
+        </Text>
+        <Text color={COLORS.faint}> · press [b]</Text>
+      </Box>
+
       <Box marginTop={1} flexDirection="column">
         <Text color={COLORS.faint}>↑↓ move · [space] on/off · [enter] expand group</Text>
-        <Text color={COLORS.faint}>←→ interval · +/- daily goal · [q] done</Text>
+        <Text color={COLORS.faint}>←→ interval · +/- daily goal · [b] bell · [q] done</Text>
       </Box>
     </Box>
   );

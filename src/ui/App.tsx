@@ -27,6 +27,7 @@ import type { Activity, ClaudeState, Config, LogEvent } from '../core/types.js';
 import { ClaudeSignal } from '../claude/signal.js';
 import { appendEvent, loadLog } from '../store/log.js';
 import { loadConfig } from '../store/config.js';
+import { emit, idleSequence, nudgeSequence } from './attention.js';
 import { Dashboard } from './Dashboard.js';
 import { Nudge } from './Nudge.js';
 import { Picker } from './Picker.js';
@@ -197,6 +198,10 @@ export function App({ env }: AppProps): React.ReactElement {
       decision.nudge.group,
     ).filter((a) => a.id !== offered.id);
 
+    // Announce it. Without this the pane just silently changes contents, which
+    // goes unnoticed when you're watching the Claude pane instead.
+    emit(nudgeSequence(offered.title, config.attention));
+
     setScreen({
       kind: 'nudge',
       activity: offered,
@@ -205,6 +210,15 @@ export function App({ env }: AppProps): React.ReactElement {
       index: 0,
     });
   }, [screen.kind, events, config, claude, now, sessionStart, record]);
+
+  // Put the title back once the nudge is dealt with, so a stale activity name
+  // doesn't sit in the tab bar for the rest of the day.
+  useEffect(() => {
+    if (screen.kind === 'dashboard') emit(idleSequence(config.attention));
+  }, [screen.kind, config.attention]);
+
+  // Leave the terminal as we found it.
+  useEffect(() => () => emit(idleSequence(config.attention)), [config.attention]);
 
   // Session advancement.
   useEffect(() => {

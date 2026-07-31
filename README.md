@@ -63,6 +63,21 @@ dropped just because you stopped using Claude.
 Everything is demonstrated with animated pixel art. Guided activities pace
 themselves step by step, so following the animation *is* the exercise.
 
+## Noticing it
+
+Nothing pops up and nothing steals focus — the companion stays in the pane you
+put it in. But a narrow side pane changing its contents is easy to miss when
+you're watching the Claude pane, so a nudge also:
+
+- **rings the terminal bell**, which most terminals turn into a tab flash or a
+  dock bounce, according to your own terminal settings rather than ours;
+- **sets the pane's tab title** to the activity, e.g. `▶ Wrist stretch`, so it's
+  visible even when the pane is narrow or in a background tab.
+
+Both restore themselves once you've dealt with the nudge. Press `b` in
+`wellness config` to silence the bell, or set `attention.bell` / `attention.title`
+to `false` in `~/.claude-wellness/config.json`.
+
 ## Choosing what you do
 
 The scheduler decides what to offer, but it never gets the last word — whether
@@ -150,7 +165,7 @@ Art is authored in 24-bit colour and degrades to 256 or 16 colours automatically
 
 ```sh
 npm install
-npm test          # 348 tests
+npm test          # 399 tests
 npm run build
 ```
 

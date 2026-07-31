@@ -135,6 +135,19 @@ export interface Config {
     readonly enabled: boolean;
     readonly pet: string;
   };
+  /**
+   * How the companion announces a nudge.
+   *
+   * It lives in a narrow side pane while you're watching the Claude pane, so
+   * silently changing its contents doesn't register. Both signals are cheap
+   * and both are yours to switch off.
+   */
+  readonly attention: {
+    /** Emit a terminal bell — most terminals flash the tab or bounce the dock. */
+    readonly bell: boolean;
+    /** Set the pane's tab title, which stays visible when the pane isn't. */
+    readonly title: boolean;
+  };
 }
 
 /** Whether Claude Code is currently working on a prompt. */

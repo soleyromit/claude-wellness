@@ -21,6 +21,7 @@ export function defaultConfig(): Config {
     graceMinutes: 15,
     cooldownMinutes: 5,
     gamification: { enabled: true, pet: 'cactus' },
+    attention: { bell: true, title: true },
   };
 }
 
@@ -73,6 +74,16 @@ export function normalizeConfig(raw: unknown): Config {
         typeof input.gamification?.pet === 'string' && input.gamification.pet.length > 0
           ? input.gamification.pet
           : base.gamification.pet,
+    },
+    attention: {
+      bell:
+        typeof input.attention?.bell === 'boolean'
+          ? input.attention.bell
+          : base.attention.bell,
+      title:
+        typeof input.attention?.title === 'boolean'
+          ? input.attention.title
+          : base.attention.title,
     },
   };
 }
