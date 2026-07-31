@@ -89,74 +89,9 @@ describe('sprite registry', () => {
   });
 });
 
-/**
- * Pixels that make up a body. Motion arcs, sparkles and floor lines are
- * deliberately separate marks, so they're excluded — the point of this check is
- * that the *figure* holds together.
- */
-const FIGURE_PIXELS = new Set([
-  // Every tone of every body material, including the highlights and shadows
-  // added by the automatic shading pass — otherwise a lit edge pixel reads as
-  // a hole and splits an intact figure in two.
-  '1', 's', 'S', '2', // skin
-  '3', 'h', 'H', // hair
-  '4', 'c', 'C', '5', // shirt
-  '6', 'p', 'P', // trousers
-]);
-
-/** Count 4-connected regions of figure pixels in a frame. */
-function figureComponents(frame: readonly string[]): number {
-  const height = frame.length;
-  const width = frame[0]!.length;
-  const seen = Array.from({ length: height }, () => new Array<boolean>(width).fill(false));
-  const isFigure = (y: number, x: number): boolean =>
-    y >= 0 && y < height && x >= 0 && x < width && FIGURE_PIXELS.has(frame[y]![x]!);
-
-  let components = 0;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (!isFigure(y, x) || seen[y]![x]) continue;
-      components++;
-      const stack = [[y, x] as const];
-      while (stack.length > 0) {
-        const [cy, cx] = stack.pop()!;
-        if (!isFigure(cy, cx) || seen[cy]![cx]) continue;
-        seen[cy]![cx] = true;
-        stack.push([cy + 1, cx], [cy - 1, cx], [cy, cx + 1], [cy, cx - 1]);
-      }
-    }
-  }
-  return components;
-}
-
-describe('figures hold together', () => {
-  /**
-   * Regression guard. Several sprites originally shipped with limbs and heads
-   * floating unattached — a head beside its body, single-pixel hands in empty
-   * space, a torso not joined to its hips. Each looked plausible in the source
-   * and obviously broken once rendered. A detached limb shows up here as an
-   * extra connected component.
-   */
-  it.each(Object.keys(SPRITES))('%s', (name) => {
-    const sprite = SPRITES[name]!;
-    sprite.frames.forEach((frame, i) => {
-      const components = figureComponents(frame);
-      // Every figure is drawn as one continuous body, so anything above 1 is a
-      // limb that came adrift.
-      expect(components, `${name} frame ${i} has ${components} disconnected figure parts`)
-        .toBeLessThanOrEqual(1);
-    });
-  });
-
-  it('detects a genuinely detached limb', () => {
-    // Sanity-check the check itself: a torso with a hand floating two pixels
-    // away must register as two components.
-    const broken = ['cc..s...', 'cc......'];
-    expect(figureComponents(broken)).toBe(2);
-    const joined = ['cccs....', 'cc......'];
-    expect(figureComponents(joined)).toBe(1);
-  });
-});
+// Connectivity, emphasis placement, clipping and frame-to-frame movement are
+// checked across every sprite in `audit.test.ts`, which owns those rules so
+// there is one definition of them rather than two that can drift apart.
 
 describe('pet sprites', () => {
   it('has art for every mood', () => {

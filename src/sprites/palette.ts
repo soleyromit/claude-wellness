@@ -67,6 +67,13 @@ export const PALETTE: Readonly<Record<string, string>> = {
   U: '#75664a', // dead mid
   z: '#4a4030', // dead shadow
 
+  // Bloom. Its own tones rather than borrowing the strain red: a flower is
+  // art, not an annotation, and sharing a colour with "this muscle is working"
+  // makes the two impossible to tell apart when checking the art.
+  j: '#f3798f', // petal
+  J: '#c94d64', // petal shadow
+  q: '#ffe08a', // bloom centre
+
   // -------------------------------------------------------------------- water
   g: '#bde8fa', // glass highlight
   G: '#5fa8c7', // glass shadow

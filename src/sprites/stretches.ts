@@ -200,7 +200,7 @@ function ankleFrame(angleDeg: number, mirrored: boolean): string[] {
   limb(grid, ANKLE, heel, 3, 'S');
 
   // Faint arc tracing the path the toe travels.
-  for (let a = -70; a <= 110; a += 15) {
+  for (let a = -70; a <= 110; a += 4) {
     const r = (a * Math.PI) / 180;
     plot(grid, ANKLE[0] + dir * 11 * Math.cos(r), ANKLE[1] + 11 * Math.sin(r), 'y');
   }

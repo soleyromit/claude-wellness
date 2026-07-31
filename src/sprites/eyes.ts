@@ -112,7 +112,7 @@ function shutEye(): string[] {
 /** Distance markers under the eye, showing focus travelling outward. */
 function withMarker(rows: string[], reach: number): string[] {
   const grid = rows.map((r) => [...r]);
-  const width = Math.max(1, Math.round(reach * 6));
+  const width = Math.max(2, Math.round(reach * 6));
   for (let i = 0; i < width; i++) plot(grid, CX - 3 + i, 21, 'y');
   return grid.map((r) => r.join(''));
 }
@@ -141,7 +141,7 @@ export const blink: Sprite = makeSprite(
     shutEye(),
     shutEye(),
     openEye(3, CX),
-    openEye(7, CX, true), // wide, with the brow lifted
+    openEye(6, CX, true), // wide, with the brow lifted
   ],
   { shade: false },
 );

@@ -20,16 +20,18 @@ import type { Sprite } from '../render/pixel.js';
 import { PALETTE } from './palette.js';
 import { makeSprite } from './make.js';
 import {
+  SHIRT_TONES,
   arrow,
   drawPose,
   framesFromPoses,
   ground,
+  tintBody,
   toRows,
   type Pose,
 } from './figure.js';
 
 /** Frames each instruction step gets. Must match `framesPerStep` on the activity. */
-export const FRAMES_PER_STEP = 5;
+export const FRAMES_PER_STEP = 7;
 
 /**
  * Build a strip from one key pose per step.
@@ -205,15 +207,19 @@ const PLANK_SAG: Pose = { ...PLANK, hip: [21, 23], knee: [26, 24] };
  */
 export const plank: Sprite = makeSprite(
   PALETTE,
-  framesFromPoses([PLANK_SAG, PLANK, PLANK], FRAMES_PER_STEP, (pose, step) => {
+  framesFromPoses([PLANK_SAG, PLANK, PLANK], FRAMES_PER_STEP, (pose, step, t) => {
     const grid = drawPose(pose);
-    ground(grid);
-    if (step === 1) {
-      for (let x = 13; x <= 20; x++) {
-        grid[19]![x] = 'y';
-        grid[20]![x] = 'y';
-      }
+    // Tint the midsection of the torso, following whatever shape the shirt
+    // actually occupies. Pulses with the hold rather than sitting constant.
+    if (step === 1 && t > 0.4) {
+      tintBody(
+        grid,
+        (x) => x >= pose.shoulder[0] + 2 && x <= pose.hip[0] - 2,
+        SHIRT_TONES,
+        'Y',
+      );
     }
+    ground(grid);
     return toRows(grid);
   }),
 );

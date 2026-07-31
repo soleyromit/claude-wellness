@@ -243,6 +243,31 @@ export function ground(grid: Grid, y = GROUND_Y + 1): void {
   }
 }
 
+/**
+ * Recolour body pixels inside a region, leaving everything else alone.
+ *
+ * Emphasis has to follow the anatomy. Painting a rectangle instead severs
+ * whatever it crosses and hangs out past the silhouette — which is precisely
+ * how the plank's core glow ended up as two bars floating across the canvas.
+ */
+export function tintBody(
+  grid: Grid,
+  region: (x: number, y: number) => boolean,
+  from: ReadonlySet<string>,
+  tone: string,
+): void {
+  for (let y = 0; y < FIGURE_SIZE; y++) {
+    for (let x = 0; x < FIGURE_SIZE; x++) {
+      if (!from.has(grid[y]![x]!)) continue;
+      if (!region(x, y)) continue;
+      grid[y]![x] = tone;
+    }
+  }
+}
+
+/** Shirt tones, for tinting the torso. */
+export const SHIRT_TONES: ReadonlySet<string> = new Set(['c', 'C', '4', '5']);
+
 /** Directional cue — a chevron showing which way the movement goes. */
 export function arrow(grid: Grid, x: number, y: number, dir: 'up' | 'down'): void {
   const s = dir === 'up' ? -1 : 1;
@@ -317,7 +342,11 @@ export function framesFromPoses(
   poses.forEach((pose, step) => {
     const from = step === 0 ? poses[poses.length - 1]! : poses[step - 1]!;
     for (let i = 0; i < framesPerStep; i++) {
-      const raw = Math.min(1, (i / Math.max(1, framesPerStep - 1)) * 2);
+      // Spread the movement across roughly the first two-thirds of the block,
+      // then hold. Reaching the pose by the halfway point instead compresses
+      // the whole motion into two frames, which reads as a jump rather than a
+      // movement — and a movement is the part you copy.
+      const raw = Math.min(1, (i / Math.max(1, framesPerStep - 1)) * 1.5);
       frames.push(render(lerpPose(from, pose, ease(raw)), step, raw));
     }
   });

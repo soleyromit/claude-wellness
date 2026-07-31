@@ -198,14 +198,14 @@ function cactus(spec: MoodSpec): string[] {
       [13, 2], [17, 2],
       [14, 3], [15, 3], [16, 3],
     ] as const) {
-      put(grid, dx, fy + dy, 'r');
+      put(grid, dx, fy + dy, dx > 15 ? 'J' : 'j');
     }
-    put(grid, 14, fy + 1, 'y');
-    put(grid, 15, fy + 1, 'y');
-    put(grid, 16, fy + 1, 'Y');
-    put(grid, 14, fy + 2, 'y');
-    put(grid, 15, fy + 2, 'Y');
-    put(grid, 16, fy + 2, 'Y');
+    put(grid, 14, fy + 1, 'q');
+    put(grid, 15, fy + 1, 'q');
+    put(grid, 16, fy + 1, 'J');
+    put(grid, 14, fy + 2, 'q');
+    put(grid, 15, fy + 2, 'J');
+    put(grid, 16, fy + 2, 'J');
   }
 
   // -------------------------------------------------------------------- pot
