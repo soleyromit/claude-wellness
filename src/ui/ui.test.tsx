@@ -6,6 +6,7 @@ import { buildPlan, sessionStateAt } from '../core/session.js';
 import type { Ring } from '../core/progress.js';
 import { Dashboard } from './Dashboard.js';
 import { Nudge } from './Nudge.js';
+import { Picker } from './Picker.js';
 import { Rings } from './Rings.js';
 import { Session, SessionComplete } from './Session.js';
 import { bar, formatMinutes, tierFor } from './theme.js';
@@ -179,6 +180,73 @@ describe('Nudge', () => {
     );
     expect(out).toContain('Wrist & finger stretch');
     expect(out).not.toContain('▀');
+  });
+});
+
+describe('Picker', () => {
+  const activities = [
+    getActivity('exercise-squats')!,
+    getActivity('stretch-wrists')!,
+    getActivity('breathe-box')!,
+  ];
+  const due = new Set(['exercise-squats']);
+
+  it('lists the activities with the cursor on one', () => {
+    const out = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={0} tier="full" />).lastFrame(),
+    );
+    expect(out).toContain('Sit-to-stand squats');
+    expect(out).toContain('Wrist & finger stretch');
+    expect(out).toContain('❯');
+  });
+
+  it('marks which activities are due', () => {
+    const out = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={0} tier="full" />).lastFrame(),
+    );
+    expect(out).toContain('due');
+  });
+
+  it('shows a position counter', () => {
+    const out = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={1} tier="full" />).lastFrame(),
+    );
+    expect(out).toContain('2/3');
+  });
+
+  it('previews the highlighted activity, so you see it before committing', () => {
+    const out = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={1} tier="full" />).lastFrame(),
+    );
+    // The sprite renders as half-block glyphs, and the cue names the activity.
+    expect(out).toContain('▀');
+    expect(out).toContain('RSI');
+  });
+
+  it('previews whatever the cursor moves to', () => {
+    const first = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={0} tier="full" />).lastFrame(),
+    );
+    const second = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={2} tier="full" />).lastFrame(),
+    );
+    expect(first).toContain('chair you are already in');
+    expect(second).toContain('marker around the box');
+  });
+
+  it('drops the preview rather than squeezing the list in a narrow pane', () => {
+    const out = plain(
+      render(<Picker activities={activities} dueIds={due} cursor={0} tier="compact" />).lastFrame(),
+    );
+    expect(out).toContain('Sit-to-stand squats');
+    expect(out).not.toContain('▀');
+  });
+
+  it('explains how to fix an empty routine', () => {
+    const out = plain(
+      render(<Picker activities={[]} dueIds={new Set()} cursor={0} tier="full" />).lastFrame(),
+    );
+    expect(out).toContain('wellness config');
   });
 });
 

@@ -85,9 +85,10 @@ you can drop and do push-ups right now depends on things it can't see.
 
 - On a nudge, **`tab`** swaps the offer for something else. The counter shows
   where you are in the list, and alternatives from the same group come first.
-- On the dashboard, **`p`** opens a picker with everything you've enabled,
-  ordered most-overdue-first and marked with what's due. Arrow keys, `enter` to
-  start.
+- On the dashboard, **`p`** opens a picker with everything you have enabled,
+  ordered most-overdue-first and marked with what is due. Whatever you highlight
+  animates in a preview beside the list, so you can see what an activity
+  involves before committing to it. Arrow keys, `enter` to start.
 
 ## Commands
 
@@ -165,7 +166,7 @@ Art is authored in 24-bit colour and degrades to 256 or 16 colours automatically
 
 ```sh
 npm install
-npm test          # 399 tests
+npm test          # 406 tests
 npm run build
 ```
 
