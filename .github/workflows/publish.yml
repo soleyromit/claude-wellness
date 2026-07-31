@@ -1,0 +1,45 @@
+# Publishing without a credential.
+#
+# The npm account requires a second factor for writes, and a passkey cannot be
+# typed into a terminal — so no token or session on a laptop can publish this
+# package. Trusted publishing solves it from the other end: npm is told to
+# trust this workflow in this repository, GitHub hands it a short-lived OIDC
+# token at run time, and there is no long-lived secret anywhere to leak.
+#
+# Setup, once, at npmjs.com → claude-wellness → Settings → Trusted Publisher:
+#   organisation/repository   soleyromit/claude-wellness
+#   workflow filename         publish.yml
+#
+# Then publish by pushing a tag that matches the version in package.json:
+#   git tag v0.2.0 && git push origin v0.2.0
+
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # What lets npm verify the run came from this workflow.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 ships older.
+      - run: npm install -g npm@latest
+
+      - run: npm ci
+
+      # `prepublishOnly` builds and runs the tests, so a broken release
+      # cannot reach the registry.
+      - run: npm publish
