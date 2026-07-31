@@ -23,6 +23,7 @@ import {
   SHIRT_TONES,
   arrow,
   drawPose,
+  scalePose,
   framesFromPoses,
   ground,
   tintBody,
@@ -44,13 +45,16 @@ function strip(
   poses: readonly Pose[],
   cue?: (step: number) => { x: number; y: number; dir: 'up' | 'down' } | null,
 ): string[][] {
-  return framesFromPoses(poses, FRAMES_PER_STEP, (pose, step, t) => {
+  // Poses are authored on a 32 grid and scaled up, so the coordinates stay
+  // readable and the canvas can change without re-authoring every joint.
+  return framesFromPoses(poses.map((p) => scalePose(p)), FRAMES_PER_STEP, (pose, step, t) => {
     const grid = drawPose(pose);
     ground(grid);
     const c = cue?.(step);
-    // Fade the arrow out as the pose settles, so it marks the movement rather
-    // than sitting there through the hold.
-    if (c && t < 0.9) arrow(grid, c.x, c.y, c.dir);
+    // Cue positions are authored on the same 32 grid as the poses, so they
+    // scale with them — otherwise an arrow that sat beside the figure ends up
+    // on top of it.
+    if (c && t < 0.9) arrow(grid, c.x * 1.4, c.y * 1.4 + 2, c.dir);
     return toRows(grid);
   });
 }
@@ -207,7 +211,7 @@ const PLANK_SAG: Pose = { ...PLANK, hip: [21, 23], knee: [26, 24] };
  */
 export const plank: Sprite = makeSprite(
   PALETTE,
-  framesFromPoses([PLANK_SAG, PLANK, PLANK], FRAMES_PER_STEP, (pose, step, t) => {
+  framesFromPoses([PLANK_SAG, PLANK, PLANK].map((p) => scalePose(p)), FRAMES_PER_STEP, (pose, step, t) => {
     const grid = drawPose(pose);
     // Tint the midsection of the torso, following whatever shape the shirt
     // actually occupies. Pulses with the hold rather than sitting constant.

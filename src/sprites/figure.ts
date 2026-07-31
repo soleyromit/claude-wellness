@@ -1,28 +1,25 @@
 /**
  * A side-view articulated figure.
  *
- * Poses are defined as joint positions and the body is drawn between them,
- * which keeps the figure connected, keeps the same person in every exercise,
- * and makes tweening between poses free.
+ * Poses are joint positions and the body is drawn between them, which keeps
+ * the figure connected, keeps the same person in every exercise, and makes
+ * tweening between poses free.
  *
- * What makes the figure read as a person rather than a stick construction:
+ * The canvas is 48x48 — twenty-four terminal rows. That is deliberate and it
+ * is the main thing standing between this and a stick construction: at 32 a
+ * whole person is twenty-six pixels tall, which leaves six for the head and
+ * eight for the torso. There is no room for a hand, a collar or a shoe at that
+ * size, so no amount of care produces detail. Fifty per cent more height is
+ * roughly double the pixels to spend.
  *
- *  - **Tapered limbs.** A thigh is thicker than a shin and an upper arm thicker
- *    than a forearm. Uniform tubes are the single biggest tell of a crude
- *    pixel figure.
- *  - **A shaped torso.** Shoulders wider than the waist, hips flaring again,
- *    instead of a rectangle.
- *  - **A profile head.** At this size a nose and a jaw do more for
- *    recognisability than any amount of interior detail.
- *  - **An outline.** A dark contour around the whole silhouette. This is what
- *    lets the figure hold together against the background and stops limbs
- *    dissolving into each other where they overlap.
- *
- * Everything is authored in flat mid-tones; `shadeFrames` adds rim lighting.
+ * The skeleton is procedural; the detail is not. Limbs, torso and head are
+ * laid down from the joints, then hand-authored features go on top —
+ * collar and hem, elbow and knee definition, a hand with a thumb, a shoe with
+ * a sole, a face with a brow and a jaw. Procedural alone reads as tubing.
  */
 
-export const FIGURE_SIZE = 32;
-export const GROUND_Y = 28;
+export const FIGURE_SIZE = 48;
+export const GROUND_Y = 44;
 
 export type Point = readonly [x: number, y: number];
 
@@ -35,10 +32,7 @@ export interface Pose {
   readonly knee: Point;
   readonly ankle: Point;
   readonly toe: Point;
-  /**
-   * Back of the foot. Drawing the heel separately is what makes a calf raise
-   * legible — without it, "on the toes" and "flat" differ by a pixel of height.
-   */
+  /** Back of the foot — what makes a calf raise legible. */
   readonly heel?: Point;
   /** Far leg, drawn behind. Omit where the legs are together. */
   readonly backKnee?: Point;
@@ -61,6 +55,14 @@ export function plot(grid: Grid, x: number, y: number, ch: string): void {
   grid[py]![px] = ch;
 }
 
+/** Read a pixel, or '.' outside the canvas. */
+function at(grid: Grid, x: number, y: number): string {
+  const px = Math.round(x);
+  const py = Math.round(y);
+  if (px < 0 || px >= FIGURE_SIZE || py < 0 || py >= FIGURE_SIZE) return '.';
+  return grid[py]![px]!;
+}
+
 /** A limb whose width changes along its length. */
 export function taperedLimb(
   grid: Grid,
@@ -69,10 +71,11 @@ export function taperedLimb(
   thickA: number,
   thickB: number,
   tone: string,
+  shade?: string,
 ): void {
   const [x0, y0] = a;
   const [x1, y1] = b;
-  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 2;
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 3;
   const vertical = Math.abs(y1 - y0) >= Math.abs(x1 - x0);
 
   for (let i = 0; i <= steps; i++) {
@@ -82,13 +85,15 @@ export function taperedLimb(
     const half = (thickA + (thickB - thickA) * t - 1) / 2;
 
     for (let d = -half; d <= half; d += 0.5) {
-      if (vertical) plot(grid, x + d, y, tone);
-      else plot(grid, x, y + d, tone);
+      // Shade the trailing edge of the limb, which is what gives it roundness
+      // rather than reading as a flat ribbon.
+      const useShade = shade && d > half - 1.2;
+      if (vertical) plot(grid, x + d, y, useShade ? shade : tone);
+      else plot(grid, x, y + d, useShade ? shade : tone);
     }
   }
 }
 
-/** Constant-width limb. */
 export function limb(grid: Grid, a: Point, b: Point, thickness: number, tone: string): void {
   taperedLimb(grid, a, b, thickness, thickness, tone);
 }
@@ -103,84 +108,186 @@ export function disc(grid: Grid, centre: Point, radius: number, tone: string): v
 }
 
 /**
- * Torso as a tapered slab: wide at the shoulders, narrower at the waist, and
- * flaring slightly at the hips. Drawn perpendicular to the spine so it stays
- * correct when the figure bends forward.
+ * Torso: chest, waist and hips, drawn perpendicular to the spine so it stays
+ * correct when the body bends. Carries a collar, a sleeve seam and a hem —
+ * the clothing details that separate a person from a coloured slab.
  */
 function torso(grid: Grid, shoulder: Point, hip: Point, facing: number): void {
   const dx = hip[0] - shoulder[0];
   const dy = hip[1] - shoulder[1];
   const len = Math.max(1, Math.hypot(dx, dy));
-  // Unit normal to the spine.
   const nx = -dy / len;
   const ny = dx / len;
 
-  const steps = Math.ceil(len * 2);
+  const steps = Math.ceil(len * 3);
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     const x = shoulder[0] + dx * t;
     const y = shoulder[1] + dy * t;
-    // Chest 8 wide, waist 6, hips 7.
-    const width = t < 0.45 ? 8 - t * 4 : 6 + (t - 0.45) * 2;
+
+    // Chest 12 wide, waist 9, hips 11.
+    const width = t < 0.45 ? 12 - t * 6 : 9 + (t - 0.45) * 4;
     const half = (width - 1) / 2;
 
     for (let d = -half; d <= half; d += 0.5) {
-      // Bias the chest forward, so the figure has a front and a back.
-      const bias = t < 0.5 ? facing * 0.4 : 0;
-      plot(grid, x + nx * d + bias, y + ny * d, 'c');
+      const bias = t < 0.5 ? facing * 0.6 : 0;
+      // Back of the torso in shadow, front lit.
+      const tone = d * facing > half - 1.5 ? 'C' : 'c';
+      plot(grid, x + nx * d + bias, y + ny * d, tone);
+    }
+
+    // Collar at the top, hem at the bottom.
+    if (t < 0.08) {
+      for (let d = -half; d <= half; d += 0.5) {
+        plot(grid, x + nx * d, y + ny * d, '5');
+      }
+    }
+    if (t > 0.62 && t < 0.72) {
+      for (let d = -half; d <= half; d += 0.5) {
+        plot(grid, x + nx * d, y + ny * d, '5');
+      }
     }
   }
 }
 
 /**
- * Head in profile: skull, jaw, nose and hair.
+ * Head in profile: skull, hair with a parting, ear, brow, eye, nose, mouth
+ * and jaw.
  *
- * The nose is three pixels and it is the difference between a circle and a
- * person. `facing` decides which side it sits on.
+ * At 48 there is finally room for these to be separate features rather than
+ * one blob with a dot in it, and a face is what the eye looks for first.
  */
 function head(grid: Grid, centre: Point, facing: number): void {
   const [cx, cy] = centre;
+  const f = facing;
 
+  // Skull. Radius 3 keeps the figure around six heads tall; radius 5 made the
+  // head as deep as the torso, which is the single most obvious way for a
+  // figure to look wrong regardless of how well the rest is drawn.
   disc(grid, [cx, cy], 3, 's');
-  // Jaw, slightly forward of the skull.
-  plot(grid, cx + facing, cy + 3, 's');
-  plot(grid, cx + facing * 2, cy + 2, 's');
+  // Jaw and chin.
+  plot(grid, cx + f * 1, cy + 3, 's');
+  plot(grid, cx + f * 2, cy + 2, 's');
+  plot(grid, cx + f * 2, cy + 3, 'S');
 
   // Nose.
-  plot(grid, cx + facing * 4, cy, 's');
-  plot(grid, cx + facing * 4, cy + 1, 'S');
+  plot(grid, cx + f * 4, cy, 's');
+  plot(grid, cx + f * 4, cy + 1, 'S');
 
-  // Hair over the crown and down the back of the skull.
+  // Brow, eye, mouth.
+  plot(grid, cx + f * 2, cy - 1, 'S');
+  plot(grid, cx + f * 3, cy, 'o');
+  plot(grid, cx + f * 3, cy + 2, 'S');
+
+  // Ear.
+  plot(grid, cx - f * 1, cy + 1, 'S');
+
+  // Hair: crown and the back of the skull.
   for (let dx = -3; dx <= 2; dx++) {
-    plot(grid, cx + facing * dx, cy - 3, 'h');
+    plot(grid, cx + f * dx, cy - 3, 'h');
+    if (dx <= 0) plot(grid, cx + f * dx, cy - 4, 'h');
   }
-  for (let dy = -2; dy <= 1; dy++) {
-    plot(grid, cx - facing * 3, cy + dy, 'h');
-    plot(grid, cx - facing * 4, cy + dy, 'H');
+  for (let dy = -2; dy <= 2; dy++) {
+    plot(grid, cx - f * 3, cy + dy, 'h');
+    plot(grid, cx - f * 4, cy + dy, 'H');
   }
-  plot(grid, cx + facing * 2, cy - 2, 'h');
-
-  // Eye.
-  plot(grid, cx + facing * 2, cy, 'o');
+  plot(grid, cx + f * 1, cy - 4, '3');
 }
 
-/**
- * Foot: a shallow wedge from the ankle.
- *
- * Drawn in a shoe tone rather than the outline colour — an outline-coloured
- * foot plus the outline pass produces a solid dark blob with no shape to it.
- */
-function foot(grid: Grid, ankle: Point, toe: Point, heel: Point | undefined): void {
-  taperedLimb(grid, ankle, toe, 3, 2, 'P');
-  if (heel) taperedLimb(grid, ankle, heel, 3, 2, 'P');
+/** Hand: a palm with a thumb, rather than a blob. */
+function hand(grid: Grid, centre: Point, towards: Point): void {
+  const [cx, cy] = centre;
+  const dx = Math.sign(cx - towards[0]) || 1;
+  const dy = Math.sign(cy - towards[1]) || 1;
+
+  disc(grid, [cx, cy], 2, 's');
+  plot(grid, cx + dx, cy, '1');
+  plot(grid, cx + dx, cy + dy, 'S');
+  // Thumb, set off the side of the palm.
+  plot(grid, cx - dy, cy + dx, 'S');
+}
+
+/** Shoe: upper, sole and heel block. */
+function shoe(grid: Grid, ankle: Point, toe: Point, heel: Point | undefined): void {
+  taperedLimb(grid, ankle, toe, 5, 3, 'P');
+  if (heel) taperedLimb(grid, ankle, heel, 5, 4, 'P');
+
+  // Sole runs under the whole foot.
+  const sole = (a: Point, b: Point): void => {
+    const steps = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]), 1) * 2;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      plot(grid, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t + 2, 'o');
+    }
+  };
+  sole(ankle, toe);
+  if (heel) sole(ankle, heel);
+}
+
+/** Elbow and knee definition — a shadow crease where the limb bends. */
+function joint(grid: Grid, at_: Point, tone: string): void {
+  disc(grid, at_, 1, tone);
 }
 
 /**
  * Trace a dark contour around the silhouette.
  *
- * Applied last, to transparent pixels only, so it never eats the figure. This
- * is what stops a limb crossing the torso from dissolving into it.
+ * Applied last, to transparent pixels only. This is what stops a limb crossing
+ * the torso from dissolving into it, and what lets the figure hold against the
+ * background.
  */
+/**
+ * Erase everything that isn't attached to the main body.
+ *
+ * Stepping along a line and rounding to the grid occasionally strands a pixel
+ * or two a step away from the limb they belong to. A figure is by definition
+ * one connected mass, so rather than tuning a size threshold and re-tuning it
+ * every time the geometry changes, keep the largest component and drop the
+ * rest. That makes connectivity a property of the renderer instead of
+ * something to be rediscovered in each new pose.
+ */
+function keepLargestBody(grid: Grid): void {
+  // Exactly the tones the audit counts as body. Including outline here would
+  // let a stray pixel survive because an outline pixel bridges it — cleanup
+  // and the check must agree on what "connected" means or they cancel out.
+  const BODY = new Set([
+    '1', 's', 'S', '2',
+    '3', 'h', 'H',
+    '4', 'c', 'C', '5',
+    '6', 'p', 'P',
+    'Y', 'r', 'R',
+  ]);
+  const isBody = (x: number, y: number): boolean => BODY.has(at(grid, x, y));
+
+  const seen = Array.from({ length: FIGURE_SIZE }, () =>
+    new Array<boolean>(FIGURE_SIZE).fill(false),
+  );
+  const groups: Array<Array<readonly [number, number]>> = [];
+
+  for (let y = 0; y < FIGURE_SIZE; y++) {
+    for (let x = 0; x < FIGURE_SIZE; x++) {
+      if (!isBody(x, y) || seen[y]![x]) continue;
+      const cells: Array<readonly [number, number]> = [];
+      const stack: Array<readonly [number, number]> = [[x, y]];
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop()!;
+        if (cx < 0 || cx >= FIGURE_SIZE || cy < 0 || cy >= FIGURE_SIZE) continue;
+        if (!isBody(cx, cy) || seen[cy]![cx]) continue;
+        seen[cy]![cx] = true;
+        cells.push([cx, cy]);
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      }
+      groups.push(cells);
+    }
+  }
+
+  if (groups.length < 2) return;
+  groups.sort((a, b) => b.length - a.length);
+  for (const group of groups.slice(1)) {
+    for (const [x, y] of group) plot(grid, x, y, '.');
+  }
+}
+
 function outline(grid: Grid): void {
   const solid = grid.map((row) => row.map((c) => c !== '.'));
 
@@ -195,60 +302,10 @@ function outline(grid: Grid): void {
 }
 
 /**
- * Draw a full figure from a pose.
- *
- * Order matters: the far limbs go down first so the near ones overlap them,
- * which is what reads as depth in a side view.
- */
-export function drawPose(pose: Pose, options: { outline?: boolean } = {}): Grid {
-  const grid = blankFigure();
-  const facing = pose.facing ?? 1;
-
-  // Far leg, in shadow so it sits behind.
-  if (pose.backKnee && pose.backAnkle) {
-    taperedLimb(grid, pose.hip, pose.backKnee, 6, 5, 'P');
-    taperedLimb(grid, pose.backKnee, pose.backAnkle, 5, 3, 'P');
-    if (pose.backToe) taperedLimb(grid, pose.backAnkle, pose.backToe, 3, 2, 'k');
-  }
-
-  // Far arm, behind the torso.
-  taperedLimb(grid, pose.shoulder, pose.elbow, 4, 3, 'C');
-
-  torso(grid, pose.shoulder, pose.hip, facing);
-
-  // Near leg, thigh into shin.
-  taperedLimb(grid, pose.hip, pose.knee, 7, 5, 'p');
-  taperedLimb(grid, pose.knee, pose.ankle, 5, 3, 'p');
-  foot(grid, pose.ankle, pose.toe, pose.heel);
-
-  // Near arm, over the torso, with a hand at the end. Kept slim: an arm as
-  // thick as the chest reads as a slab across the body rather than a limb.
-  taperedLimb(grid, pose.shoulder, pose.elbow, 4, 3, 's');
-  taperedLimb(grid, pose.elbow, pose.hand, 3, 2, 's');
-  disc(grid, pose.hand, 1, 'S');
-
-  // Neck, then head over everything.
-  taperedLimb(grid, pose.head, pose.shoulder, 4, 5, 's');
-  head(grid, pose.head, facing);
-
-  if (options.outline !== false) outline(grid);
-
-  return grid;
-}
-
-/** A ground line, so poses have something to press against. */
-export function ground(grid: Grid, y = GROUND_Y + 1): void {
-  for (let x = 1; x < FIGURE_SIZE - 1; x++) {
-    if (grid[y]![x] === '.' || grid[y]![x] === 'o') plot(grid, x, y, 'a');
-  }
-}
-
-/**
  * Recolour body pixels inside a region, leaving everything else alone.
  *
  * Emphasis has to follow the anatomy. Painting a rectangle instead severs
- * whatever it crosses and hangs out past the silhouette — which is precisely
- * how the plank's core glow ended up as two bars floating across the canvas.
+ * whatever it crosses and hangs out past the silhouette.
  */
 export function tintBody(
   grid: Grid,
@@ -265,17 +322,97 @@ export function tintBody(
   }
 }
 
-/** Shirt tones, for tinting the torso. */
 export const SHIRT_TONES: ReadonlySet<string> = new Set(['c', 'C', '4', '5']);
 
-/** Directional cue — a chevron showing which way the movement goes. */
+/**
+ * Draw a full figure from a pose.
+ *
+ * Far limbs first so the near ones overlap them, which is what reads as depth
+ * in a side view; hand-authored detail last so nothing paints over a face.
+ */
+export function drawPose(pose: Pose, options: { outline?: boolean } = {}): Grid {
+  const grid = blankFigure();
+  const facing = pose.facing ?? 1;
+
+  // Far leg and arm, in shadow so they sit behind.
+  if (pose.backKnee && pose.backAnkle) {
+    taperedLimb(grid, pose.hip, pose.backKnee, 9, 7, 'P');
+    taperedLimb(grid, pose.backKnee, pose.backAnkle, 7, 5, 'P');
+    if (pose.backToe) taperedLimb(grid, pose.backAnkle, pose.backToe, 4, 3, 'k');
+  }
+  taperedLimb(grid, pose.shoulder, pose.elbow, 6, 5, 'C');
+
+  torso(grid, pose.shoulder, pose.hip, facing);
+
+  // Near leg: thigh into calf, with a knee crease and a shoe.
+  taperedLimb(grid, pose.hip, pose.knee, 10, 7, 'p', 'P');
+  taperedLimb(grid, pose.knee, pose.ankle, 7, 5, 'p', 'P');
+  joint(grid, pose.knee, 'P');
+  shoe(grid, pose.ankle, pose.toe, pose.heel);
+  // Shorts hem across the thigh.
+  taperedLimb(
+    grid,
+    pose.hip,
+    [pose.hip[0] + (pose.knee[0] - pose.hip[0]) * 0.45, pose.hip[1] + (pose.knee[1] - pose.hip[1]) * 0.45],
+    10,
+    9,
+    'p',
+  );
+
+  // Near arm, over the torso, with an elbow and a hand.
+  taperedLimb(grid, pose.shoulder, pose.elbow, 7, 5, 's', 'S');
+  taperedLimb(grid, pose.elbow, pose.hand, 5, 4, 's', 'S');
+  joint(grid, pose.elbow, 'S');
+  hand(grid, pose.hand, pose.elbow);
+  // Sleeve, covering the top third of the upper arm.
+  taperedLimb(
+    grid,
+    pose.shoulder,
+    [
+      pose.shoulder[0] + (pose.elbow[0] - pose.shoulder[0]) * 0.4,
+      pose.shoulder[1] + (pose.elbow[1] - pose.shoulder[1]) * 0.4,
+    ],
+    8,
+    6,
+    'c',
+    'C',
+  );
+
+  // Neck, then head over everything.
+  taperedLimb(grid, pose.head, pose.shoulder, 6, 8, 's', 'S');
+  head(grid, pose.head, facing);
+
+  keepLargestBody(grid);
+  if (options.outline !== false) outline(grid);
+
+  return grid;
+}
+
+/** A ground line, so poses have something to press against. */
+export function ground(grid: Grid, y = GROUND_Y + 2): void {
+  for (let x = 2; x < FIGURE_SIZE - 2; x++) {
+    if (at(grid, x, y) === '.' || at(grid, x, y) === 'o') plot(grid, x, y, 'a');
+  }
+}
+
+/**
+ * Directional cue — a chevron showing which way the movement goes.
+ *
+ * Drawn behind the figure: it only writes where nothing has been drawn yet.
+ * An arrow that paints over the body punches holes in it and leaves stray
+ * pixels stranded inside the chevron, which then read as noise.
+ */
 export function arrow(grid: Grid, x: number, y: number, dir: 'up' | 'down'): void {
   const s = dir === 'up' ? -1 : 1;
-  plot(grid, x, y, 'y');
-  plot(grid, x - 1, y + s, 'y');
-  plot(grid, x + 1, y + s, 'y');
-  plot(grid, x, y + s, 'y');
-  plot(grid, x, y + 2 * s, 'y');
+  const mark = (px: number, py: number): void => {
+    if (at(grid, px, py) === '.') plot(grid, px, py, 'y');
+  };
+
+  for (let i = 0; i < 5; i++) mark(x, y + i * s);
+  mark(x - 1, y + s);
+  mark(x + 1, y + s);
+  mark(x - 2, y + 2 * s);
+  mark(x + 2, y + 2 * s);
 }
 
 export function toRows(grid: Grid): string[] {
@@ -288,18 +425,11 @@ function lerpPoint(a: Point, b: Point, t: number): Point {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 
-/** Ease in and out, so a movement accelerates and settles rather than sliding. */
+/** Ease in and out, so a movement accelerates and settles. */
 export function ease(t: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/**
- * Blend two poses.
- *
- * Joint-based poses make this nearly free, and it is what turns a pair of
- * static positions into an instruction you can follow: you see the *path* the
- * body takes, not just where it starts and stops.
- */
 export function lerpPose(a: Pose, b: Pose, t: number): Pose {
   const pick = (key: 'backKnee' | 'backAnkle' | 'backToe' | 'heel'): Point | undefined => {
     const pa = a[key];
@@ -328,9 +458,9 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
 /**
  * Turn one key pose per instruction step into an animated strip.
  *
- * Each step gets `framesPerStep` frames: the first half eases out of the
- * previous pose into this one, the second half holds it. That gives you both
- * halves of an instruction — the movement to make, and the position to stay in.
+ * Each step eases out of the previous pose across roughly two-thirds of its
+ * block, then holds — giving both halves of an instruction: the movement to
+ * make, and the position to stay in.
  */
 export function framesFromPoses(
   poses: readonly Pose[],
@@ -342,14 +472,63 @@ export function framesFromPoses(
   poses.forEach((pose, step) => {
     const from = step === 0 ? poses[poses.length - 1]! : poses[step - 1]!;
     for (let i = 0; i < framesPerStep; i++) {
-      // Spread the movement across roughly the first two-thirds of the block,
-      // then hold. Reaching the pose by the halfway point instead compresses
-      // the whole motion into two frames, which reads as a jump rather than a
-      // movement — and a movement is the part you copy.
       const raw = Math.min(1, (i / Math.max(1, framesPerStep - 1)) * 1.5);
       frames.push(render(lerpPose(from, pose, ease(raw)), step, raw));
     }
   });
 
   return frames;
+}
+
+/**
+ * Push the body's landmarks apart so the figure reads at adult proportions.
+ *
+ * The original poses were laid out for a 32 canvas, where the head, torso and
+ * legs all had to be squat to fit. Scaling those uniformly keeps the squat
+ * proportions and simply makes everything bigger — the head ends up as deep as
+ * the torso, which is the most obvious way for a figure to look wrong however
+ * well the parts are drawn.
+ *
+ * This stretches the *gaps* instead: the head stays where it is, the shoulders
+ * drop a little, and the hips and legs drop more, giving a torso and limbs of
+ * believable length against a head that is now radius 3.
+ */
+function stretchY(y: number): number {
+  // Landmarks on the authoring grid: head 6, shoulder 12, hip 18, knee 23,
+  // ankle 26, floor 28.
+  const from = [0, 6, 12, 18, 23, 26, 28, 32];
+  const to = [0, 6, 13, 21, 26, 29, 30, 33];
+
+  for (let i = 0; i < from.length - 1; i++) {
+    if (y <= from[i + 1]!) {
+      const span = from[i + 1]! - from[i]!;
+      const t = span === 0 ? 0 : (y - from[i]!) / span;
+      return to[i]! + (to[i + 1]! - to[i]!) * t;
+    }
+  }
+  return to[to.length - 1]!;
+}
+
+/**
+ * Map a pose authored on the 32 grid onto the 48 canvas, correcting its
+ * proportions on the way.
+ */
+export function scalePose(pose: Pose, factor = 1.4, offsetY = 2): Pose {
+  const s = (p: Point): Point => [p[0] * factor, stretchY(p[1]) * factor + offsetY];
+  const opt = (p: Point | undefined): Point | undefined => (p ? s(p) : undefined);
+  return {
+    head: s(pose.head),
+    shoulder: s(pose.shoulder),
+    elbow: s(pose.elbow),
+    hand: s(pose.hand),
+    hip: s(pose.hip),
+    knee: s(pose.knee),
+    ankle: s(pose.ankle),
+    toe: s(pose.toe),
+    heel: opt(pose.heel),
+    backKnee: opt(pose.backKnee),
+    backAnkle: opt(pose.backAnkle),
+    backToe: opt(pose.backToe),
+    facing: pose.facing,
+  };
 }

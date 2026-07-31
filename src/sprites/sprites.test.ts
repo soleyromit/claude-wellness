@@ -56,10 +56,10 @@ describe('sprite registry', () => {
   });
 
   it('every sprite is one of the two supported canvas sizes', () => {
-    // 24 for props and simple figures; 32 where the pose needs the extra room
-    // to stay readable once the sprite is halved into terminal rows.
+    // 24 for props; 48 for figures, where a person needs the pixels to carry a
+    // hand, a collar and a face at all.
     for (const [name, sprite] of Object.entries(SPRITES)) {
-      expect([24, 32], `${name} has an unexpected size`).toContain(sprite.width);
+      expect([24, 48], `${name} has an unexpected size`).toContain(sprite.width);
     }
   });
 

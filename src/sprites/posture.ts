@@ -9,11 +9,11 @@
 import type { Sprite } from '../render/pixel.js';
 import { PALETTE } from './palette.js';
 import { makeSprite } from './make.js';
-import { drawPose, framesFromPoses, ground, plot, toRows, type Pose } from './figure.js';
+import { drawPose, framesFromPoses, ground, plot, scalePose, toRows, type Pose } from './figure.js';
 import { FRAMES_PER_STEP } from './exercises.js';
 
 /** Column the ear, shoulder and hip should stack on. */
-const PLUMB_X = 12;
+const PLUMB_X = 18; // 12 on the authoring grid, scaled to the 48 canvas
 
 /** Seated at a desk, slouched: head jutting forward of the plumb line. */
 const SLOUCHED: Pose = {
@@ -51,11 +51,11 @@ const STACKED: Pose = {
 
 export const posture: Sprite = makeSprite(
   PALETTE,
-  framesFromPoses([SLOUCHED, SAT_BACK, STACKED], FRAMES_PER_STEP, (pose) => {
+  framesFromPoses([SLOUCHED, SAT_BACK, STACKED].map((p) => scalePose(p)), FRAMES_PER_STEP, (pose) => {
     const grid = drawPose(pose);
 
     // Plumb line behind the figure: only visible where the body isn't.
-    for (let y = 4; y <= 20; y += 2) {
+    for (let y = 6; y <= 30; y += 2) {
       if (grid[y]![PLUMB_X] === '.') plot(grid, PLUMB_X, y, 'a');
     }
 

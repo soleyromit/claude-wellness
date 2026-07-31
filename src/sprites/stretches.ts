@@ -20,6 +20,7 @@ import {
   framesFromPoses,
   ground,
   limb,
+  scalePose,
   plot,
   toRows,
   type Pose,
@@ -27,7 +28,7 @@ import {
 import { FRAMES_PER_STEP } from './exercises.js';
 
 function strip(poses: readonly Pose[], decorate?: (grid: string[][], step: number) => void): string[][] {
-  return framesFromPoses(poses, FRAMES_PER_STEP, (pose, step) => {
+  return framesFromPoses(poses.map((p) => scalePose(p)), FRAMES_PER_STEP, (pose, step) => {
     const grid = drawPose(pose);
     ground(grid);
     decorate?.(grid, step);
@@ -179,33 +180,33 @@ export const catcow: Sprite = makeSprite(
  */
 function ankleFrame(angleDeg: number, mirrored: boolean): string[] {
   const grid = blankFigure();
-  const ANKLE: [number, number] = [16, 19];
+  const ANKLE: [number, number] = [24, 28];
   const rad = (angleDeg * Math.PI) / 180;
   const dir = mirrored ? -1 : 1;
 
   // Shin, fixed in every frame so only the foot appears to move.
-  limb(grid, [16, 3], [16, 12], 7, 'p');
-  limb(grid, [16, 12], ANKLE, 5, 's');
+  limb(grid, [24, 5], [24, 18], 11, 'p');
+  limb(grid, [24, 18], ANKLE, 8, 's');
 
   // Foot: a limb from the ankle out to the toe, plus a short heel behind it.
   const toe: [number, number] = [
-    ANKLE[0] + dir * 8 * Math.cos(rad),
-    ANKLE[1] + 8 * Math.sin(rad),
+    ANKLE[0] + dir * 12 * Math.cos(rad),
+    ANKLE[1] + 12 * Math.sin(rad),
   ];
   const heel: [number, number] = [
-    ANKLE[0] - dir * 3.5 * Math.cos(rad - 0.5),
-    ANKLE[1] - 3.5 * Math.sin(rad - 0.5),
+    ANKLE[0] - dir * 5 * Math.cos(rad - 0.5),
+    ANKLE[1] - 5 * Math.sin(rad - 0.5),
   ];
-  limb(grid, ANKLE, toe, 4, 's');
-  limb(grid, ANKLE, heel, 3, 'S');
+  limb(grid, ANKLE, toe, 6, 's');
+  limb(grid, ANKLE, heel, 5, 'S');
 
   // Faint arc tracing the path the toe travels.
   for (let a = -70; a <= 110; a += 4) {
     const r = (a * Math.PI) / 180;
-    plot(grid, ANKLE[0] + dir * 11 * Math.cos(r), ANKLE[1] + 11 * Math.sin(r), 'y');
+    plot(grid, ANKLE[0] + dir * 16 * Math.cos(r), ANKLE[1] + 16 * Math.sin(r), 'y');
   }
 
-  ground(grid, 30);
+  ground(grid, 45);
   return toRows(grid);
 }
 

@@ -59,10 +59,13 @@ describe('every sprite frame', () => {
 
   it.each(names)('%s: movement is continuous, not a jump cut', (name) => {
     for (const [i, report] of auditFrames(ALL[name]!.frames).entries()) {
+      // Proportional to the canvas: the same movement on a bigger sprite covers
+      // more pixels without being any less smooth.
+      const limit = Math.round(ALL[name]!.frames[0]!.length * 0.2);
       expect(
         report.shiftFromPrevious,
         `${name} frame ${i} jumps ${report.shiftFromPrevious}px from the previous frame`,
-      ).toBeLessThanOrEqual(6);
+      ).toBeLessThanOrEqual(limit);
     }
   });
 
