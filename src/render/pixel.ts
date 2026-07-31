@@ -203,6 +203,24 @@ export function spriteLineHeight(sprite: Sprite): number {
 }
 
 /**
+ * Shrink a sprite until it fits in `maxRows` terminal lines.
+ *
+ * Art is what gives when a pane runs out of height: the text around it is the
+ * part you cannot do without. Scaling keeps the picture rather than dropping
+ * it, down to the point where there is nothing left to scale.
+ */
+export function fitToBox(
+  sprite: Sprite,
+  maxRows = Number.POSITIVE_INFINITY,
+  maxColumns = Number.POSITIVE_INFINITY,
+): Sprite {
+  const byRows = Number.isFinite(maxRows) && maxRows > 0 ? sprite.height / (2 * maxRows) : 1;
+  const byColumns =
+    Number.isFinite(maxColumns) && maxColumns > 0 ? sprite.width / maxColumns : 1;
+  return downscale(sprite, Math.ceil(Math.max(1, byRows, byColumns)));
+}
+
+/**
  * Shrink a sprite by a whole-number factor, for use as a thumbnail.
  *
  * Figures are drawn at 48 pixels because that is what it takes to carry a face

@@ -12,7 +12,15 @@ import { Box, Text } from 'ink';
 import type { Activity } from '../core/types.js';
 import { getSprite } from '../sprites/index.js';
 import { Sprite } from './Sprite.js';
-import { COLORS, GROUP_COLORS, type Tier } from './theme.js';
+import {
+  COLORS,
+  GROUP_COLORS,
+  MIN_ART_ROWS,
+  artRowsFor,
+  textRows,
+  type PaneSize,
+  type Tier,
+} from './theme.js';
 
 export interface NudgeProps {
   readonly activity: Activity;
@@ -20,20 +28,39 @@ export interface NudgeProps {
   readonly tier: Tier;
   /** Cups logged today, shown when the activity is a hydration one. */
   readonly instantProgress?: { done: number; goal: number };
-  /** How many activities you can Tab between, and where you are in them. */
-  readonly alternativeCount?: number;
-  readonly alternativeIndex?: number;
+  /** The space available. Omit for an unbounded pane. */
+  readonly pane?: PaneSize;
 }
+
+/** Tab opens the menu — the one place you browse what else there is. */
+const SWAP = '[tab] something else';
 
 export function Nudge({
   activity,
   tier,
   instantProgress,
-  alternativeCount = 1,
-  alternativeIndex = 0,
+  pane,
 }: NudgeProps): React.ReactElement {
   const color = GROUP_COLORS[activity.group];
-  const canSwap = alternativeCount > 1;
+
+  const columns = pane?.columns ?? Number.POSITIVE_INFINITY;
+  const keys = activity.instant
+    ? '[space] log it   [s] snooze   [d] not today'
+    : '[enter] start   [s] snooze   [d] not today';
+
+  // The card without its picture. What is left over is the picture's.
+  const chrome =
+    textRows(`▶ ${activity.title}`, columns) +
+    1 + // gap above the art
+    1 +
+    textRows(activity.cue, columns) +
+    (instantProgress ? 2 : 0) +
+    1 +
+    textRows(keys, columns) +
+    textRows(SWAP, columns);
+
+  const artRows = artRowsFor(pane, chrome);
+  const showArt = tier !== 'minimal' && artRows >= MIN_ART_ROWS;
 
   return (
     <Box flexDirection="column">
@@ -41,17 +68,11 @@ export function Nudge({
         <Text bold color={color}>
           ▶ {activity.title}
         </Text>
-        {canSwap && (
-          <Text color={COLORS.faint}>
-            {'  '}
-            {alternativeIndex + 1}/{alternativeCount}
-          </Text>
-        )}
       </Box>
 
-      {tier !== 'minimal' && (
+      {showArt && (
         <Box marginTop={1} alignItems="center" flexDirection="column">
-          <Sprite sprite={getSprite(activity.sprite)} />
+          <Sprite sprite={getSprite(activity.sprite)} maxRows={artRows} />
         </Box>
       )}
 
@@ -78,15 +99,11 @@ export function Nudge({
 
       <Box marginTop={1} flexDirection="column">
         <Text color={COLORS.faint} wrap="wrap">
-          {activity.instant
-            ? '[space] log it   [s] snooze   [d] not today'
-            : '[enter] start   [s] snooze   [d] not today'}
+          {keys}
         </Text>
-        {canSwap && (
-          <Text color={COLORS.faint} wrap="wrap">
-            [tab] something else
-          </Text>
-        )}
+        <Text color={COLORS.faint} wrap="wrap">
+          {SWAP}
+        </Text>
       </Box>
     </Box>
   );

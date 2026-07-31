@@ -11,7 +11,16 @@ import { Box, Text } from 'ink';
 import { frameFor, type SessionPlan, type SessionState } from '../core/session.js';
 import { getSprite } from '../sprites/index.js';
 import { Sprite } from './Sprite.js';
-import { COLORS, GROUP_COLORS, bar, type Tier } from './theme.js';
+import {
+  COLORS,
+  GROUP_COLORS,
+  MIN_ART_ROWS,
+  artRowsFor,
+  bar,
+  textRows,
+  type PaneSize,
+  type Tier,
+} from './theme.js';
 
 export interface SessionProps {
   readonly plan: SessionPlan;
@@ -19,14 +28,40 @@ export interface SessionProps {
   readonly tier: Tier;
   /** Elapsed session time, so smooth sprites can track it continuously. */
   readonly elapsedMs: number;
+  /** The space available. Omit for an unbounded pane. */
+  readonly pane?: PaneSize;
 }
 
-export function Session({ plan, state, tier, elapsedMs }: SessionProps): React.ReactElement {
+const KEYS = '[space] skip step   [q] stop';
+
+export function Session({
+  plan,
+  state,
+  tier,
+  elapsedMs,
+  pane,
+}: SessionProps): React.ReactElement {
   const { activity } = plan;
   const color = GROUP_COLORS[activity.group];
   const sprite = getSprite(activity.sprite);
   const frame = frameFor(plan, state, sprite.frames.length, elapsedMs);
   const barWidth = tier === 'full' ? 24 : 14;
+
+  const columns = pane?.columns ?? Number.POSITIVE_INFINITY;
+  // The instruction and the clock are the session; the figure illustrates it.
+  const chrome =
+    textRows(activity.title, columns) +
+    1 + // gap above the art
+    1 +
+    textRows(state.entry.label, columns) +
+    1 + // countdown and step bar
+    1 +
+    1 + // overall bar
+    1 +
+    textRows(KEYS, columns);
+
+  const artRows = artRowsFor(pane, chrome);
+  const showArt = tier !== 'minimal' && artRows >= MIN_ART_ROWS;
 
   return (
     <Box flexDirection="column">
@@ -42,9 +77,9 @@ export function Session({ plan, state, tier, elapsedMs }: SessionProps): React.R
         )}
       </Box>
 
-      {tier !== 'minimal' && (
+      {showArt && (
         <Box marginTop={1} flexDirection="column" alignItems="center">
-          <Sprite sprite={sprite} frame={frame} />
+          <Sprite sprite={sprite} frame={frame} maxRows={artRows} />
         </Box>
       )}
 
@@ -64,7 +99,7 @@ export function Session({ plan, state, tier, elapsedMs }: SessionProps): React.R
       </Box>
 
       <Box marginTop={1}>
-        <Text color={COLORS.faint}>[space] skip step   [q] stop</Text>
+        <Text color={COLORS.faint}>{KEYS}</Text>
       </Box>
     </Box>
   );

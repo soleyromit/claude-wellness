@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import { getActivity } from '../core/activities.js';
 import { computePet } from '../core/pet.js';
 import {
@@ -28,7 +28,6 @@ import {
   isAutomatic,
   isDue,
   nextDueIn,
-  selectableActivities,
 } from '../core/scheduler.js';
 import type { Activity, ClaudeState, Config, LogEvent } from '../core/types.js';
 import { ClaudeSignal } from '../claude/signal.js';
@@ -37,8 +36,9 @@ import { loadConfig } from '../store/config.js';
 import { emit, idleSequence, nudgeSequence } from './attention.js';
 import { Dashboard } from './Dashboard.js';
 import { Nudge } from './Nudge.js';
-import { Picker, groupActivities, type PickerColumn } from './Picker.js';
+import { Picker, groupActivities, locateActivity } from './Picker.js';
 import { Session, SessionComplete } from './Session.js';
+import { insetPane, usePaneSize } from './pane.js';
 import { COLORS, tierFor } from './theme.js';
 
 /**
@@ -54,17 +54,9 @@ const COMPLETE_SCREEN_MS = 2500;
 
 type Screen =
   | { readonly kind: 'dashboard' }
-  | {
-      readonly kind: 'nudge';
-      readonly activity: Activity;
-      readonly overdueMinutes: number;
-      /** Alternatives you can Tab through, starting with what was offered. */
-      readonly alternatives: readonly Activity[];
-      readonly index: number;
-    }
+  | { readonly kind: 'nudge'; readonly activity: Activity; readonly overdueMinutes: number }
   | {
       readonly kind: 'picker';
-      readonly column: PickerColumn;
       readonly groupIndex: number;
       readonly activityIndex: number;
     }
@@ -77,14 +69,14 @@ export interface AppProps {
 
 export function App({ env }: AppProps): React.ReactElement {
   const { exit } = useApp();
-  const { stdout } = useStdout();
 
   const [config, setConfig] = useState<Config>(() => loadConfig(env));
   const [events, setEvents] = useState<LogEvent[]>(() => loadLog(env));
   const [claude, setClaude] = useState<ClaudeState>('idle');
   const [now, setNow] = useState(() => Date.now());
   const [screen, setScreen] = useState<Screen>({ kind: 'dashboard' });
-  const [columns, setColumns] = useState(stdout?.columns ?? 80);
+  const terminal = usePaneSize();
+  const columns = terminal.columns;
 
   // Groups are measured from when the companion started, so a fresh install
   // doesn't fire every reminder at once on first launch.
@@ -122,23 +114,18 @@ export function App({ env }: AppProps): React.ReactElement {
     };
   }, [env]);
 
-  // Pane resizes are common when the user rearranges splits.
-  useEffect(() => {
-    if (!stdout) return;
-    const onResize = (): void => setColumns(stdout.columns ?? 80);
-    stdout.on('resize', onResize);
-    return () => {
-      stdout.off('resize', onResize);
-    };
-  }, [stdout]);
-
   // Pick up config edits made by `wellness config` in another pane.
   useEffect(() => {
     const timer = setInterval(() => setConfig(loadConfig(env)), 5000);
     return () => clearInterval(timer);
   }, [env]);
 
-  const tier = tierFor(columns);
+  // What a screen actually gets: the terminal, less this component's padding,
+  // less the row taken by the hint below when the pane is too narrow to use.
+  const tooNarrow = columns < 30;
+  const inset = insetPane(terminal);
+  const pane = { columns: inset.columns, rows: inset.rows - (tooNarrow ? 1 : 0) };
+  const tier = tierFor(pane.columns, pane.rows);
 
   const rings = useMemo(() => ringsFor(events, config, now), [events, config, now]);
   const streaks = useMemo(() => computeStreaks(events, config, now), [events, config, now]);
@@ -201,17 +188,7 @@ export function App({ env }: AppProps): React.ReactElement {
     // immediately re-fire on the next tick.
     record({ ts: Date.now(), type: 'shown', activity: decision.nudge.activity.id });
 
-    // Offer the scheduler's pick first, with the rest behind Tab. Alternatives
-    // are captured once, when the nudge appears, so cycling through them can't
-    // shift under you as the clock moves.
     const offered = decision.nudge.activity;
-    const rest = selectableActivities(
-      events,
-      config,
-      now,
-      sessionStart,
-      decision.nudge.group,
-    ).filter((a) => a.id !== offered.id);
 
     // Announce it. Without this the pane just silently changes contents, which
     // goes unnoticed when you're watching the Claude pane instead.
@@ -221,8 +198,6 @@ export function App({ env }: AppProps): React.ReactElement {
       kind: 'nudge',
       activity: offered,
       overdueMinutes: decision.nudge.overdueMinutes,
-      alternatives: [offered, ...rest],
-      index: 0,
     });
   }, [screen.kind, events, config, claude, now, sessionStart, record]);
 
@@ -287,73 +262,31 @@ export function App({ env }: AppProps): React.ReactElement {
       const activityIndex = Math.min(screen.activityIndex, inGroup.length - 1);
 
       if (key.escape || input === 'q') {
-        // Escape steps back out one column before leaving, so it undoes the
-        // last thing you did rather than discarding the whole navigation.
-        if (screen.column === 'activities') {
-          setScreen({ ...screen, column: 'groups' });
-        } else {
-          setScreen({ kind: 'dashboard' });
-        }
+        setScreen({ kind: 'dashboard' });
         return;
       }
 
-      // Tabs move horizontally; the tile grid moves in both axes. Left and
-      // right walk the grid, wrapping onto the tabs at the very start.
-      const perRow = tier === 'full' ? 3 : tier === 'compact' ? 2 : 1;
-
-      if (screen.column === 'groups') {
-        const horizontal =
-          key.rightArrow || input === 'l' ? 1 : key.leftArrow || input === 'h' ? -1 : 0;
-        if (horizontal !== 0) {
-          const next = (groupIndex + horizontal + groups.length) % groups.length;
-          setScreen({ ...screen, groupIndex: next, activityIndex: 0 });
-          return;
-        }
-        if (key.downArrow || input === 'j') {
-          setScreen({ ...screen, column: 'activities', activityIndex: 0 });
-          return;
-        }
-      } else {
-        const delta =
-          key.rightArrow || input === 'l'
-            ? 1
-            : key.leftArrow || input === 'h'
-              ? -1
-              : key.downArrow || input === 'j'
-                ? perRow
-                : key.upArrow || input === 'k'
-                  ? -perRow
-                  : 0;
-
-        if (delta !== 0) {
-          const next = activityIndex + delta;
-          // Stepping off the top of the grid returns to the tabs, so the two
-          // read as one space rather than separate modes.
-          if (next < 0) {
-            setScreen({ ...screen, column: 'groups' });
-            return;
-          }
-          if (next < inGroup.length) {
-            setScreen({ ...screen, groupIndex, activityIndex: next });
-          }
-          return;
-        }
-      }
-
-      if (key.tab) {
-        const next = (groupIndex + (key.shift ? -1 : 1) + groups.length) % groups.length;
+      // One axis each: left and right change group, up and down walk the
+      // list. There is no second focus to lose track of.
+      const sideways =
+        key.rightArrow || input === 'l' ? 1 : key.leftArrow || input === 'h' ? -1 : 0;
+      if (sideways !== 0 || key.tab) {
+        const step = key.tab ? (key.shift ? -1 : 1) : sideways;
+        const next = (groupIndex + step + groups.length) % groups.length;
         setScreen({ ...screen, groupIndex: next, activityIndex: 0 });
         return;
       }
 
+      const vertical = key.downArrow || input === 'j' ? 1 : key.upArrow || input === 'k' ? -1 : 0;
+      if (vertical !== 0) {
+        // Stops at the ends rather than wrapping: an arrow held down should
+        // settle on the last item, not cycle past it.
+        const next = Math.max(0, Math.min(inGroup.length - 1, activityIndex + vertical));
+        setScreen({ ...screen, groupIndex, activityIndex: next });
+        return;
+      }
+
       if (key.return) {
-        // Enter on a group drills in; on an activity it starts. Starting
-        // straight from the group column would mean guessing which of its
-        // activities you meant.
-        if (screen.column === 'groups') {
-          setScreen({ ...screen, column: 'activities', groupIndex, activityIndex: 0 });
-          return;
-        }
         const chosen = inGroup[activityIndex];
         if (chosen) start(chosen);
       }
@@ -363,15 +296,11 @@ export function App({ env }: AppProps): React.ReactElement {
     if (screen.kind === 'nudge') {
       const activity = screen.activity;
 
-      // Tab swaps the offer for a different activity rather than making you
-      // refuse it outright. Shift+Tab goes back the other way.
-      if (key.tab || key.rightArrow || key.leftArrow) {
-        const count = screen.alternatives.length;
-        if (count > 1) {
-          const step = key.leftArrow || key.shift ? -1 : 1;
-          const index = (screen.index + step + count) % count;
-          setScreen({ ...screen, index, activity: screen.alternatives[index]! });
-        }
+      // "Something else" opens the menu, rather than cycling through the
+      // alternatives one at a time here. Two ways to browse the same list is
+      // one way too many, and the menu shows you what you are choosing.
+      if (key.tab) {
+        setScreen({ kind: 'picker', ...locateActivity(selectable, activity.id) });
         return;
       }
 
@@ -421,7 +350,7 @@ export function App({ env }: AppProps): React.ReactElement {
     if (input === 'n' || input === 'p') {
       // Choose deliberately rather than accepting whatever is next in line.
       if (selectable.length > 0) {
-        setScreen({ kind: 'picker', column: 'groups', groupIndex: 0, activityIndex: 0 });
+        setScreen({ kind: 'picker', groupIndex: 0, activityIndex: 0 });
       }
     }
   });
@@ -440,6 +369,7 @@ export function App({ env }: AppProps): React.ReactElement {
           nextDue={upcoming}
           claude={claude}
           tier={tier}
+          pane={pane}
         />
       )}
 
@@ -448,8 +378,7 @@ export function App({ env }: AppProps): React.ReactElement {
           activity={screen.activity}
           overdueMinutes={screen.overdueMinutes}
           tier={tier}
-          alternativeCount={screen.alternatives.length}
-          alternativeIndex={screen.index}
+          pane={pane}
           instantProgress={
             screen.activity.instant && hydrationRing
               ? { done: hydrationRing.done, goal: hydrationRing.goal }
@@ -463,10 +392,10 @@ export function App({ env }: AppProps): React.ReactElement {
           activities={selectable}
           dueIds={dueIds}
           autoIds={autoIds}
-          column={screen.column}
           groupIndex={screen.groupIndex}
           activityIndex={screen.activityIndex}
           tier={tier}
+          pane={pane}
         />
       )}
 
@@ -478,6 +407,7 @@ export function App({ env }: AppProps): React.ReactElement {
               plan={screen.plan}
               state={sessionStateAt(screen.plan, elapsed)}
               tier={tier}
+              pane={pane}
               elapsedMs={elapsed}
             />
           );
@@ -487,7 +417,7 @@ export function App({ env }: AppProps): React.ReactElement {
         <SessionComplete title={screen.title} xp={screen.xp} tier={tier} />
       )}
 
-      {tier === 'minimal' && columns < 30 && (
+      {tooNarrow && (
         <Text color={COLORS.faint}>(widen the pane for the full view)</Text>
       )}
     </Box>

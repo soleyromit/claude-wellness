@@ -16,7 +16,16 @@ import type { ActivityGroup, ClaudeState } from '../core/types.js';
 import { petSprite } from '../sprites/index.js';
 import { Rings } from './Rings.js';
 import { Sprite } from './Sprite.js';
-import { COLORS, bar, formatMinutes, type Tier } from './theme.js';
+import {
+  COLORS,
+  MIN_ART_ROWS,
+  artRowsFor,
+  bar,
+  formatMinutes,
+  textRows,
+  type PaneSize,
+  type Tier,
+} from './theme.js';
 
 export interface DashboardProps {
   readonly rings: readonly Ring[];
@@ -27,6 +36,8 @@ export interface DashboardProps {
   readonly nextDue: { group: ActivityGroup; minutes: number } | null;
   readonly claude: ClaudeState;
   readonly tier: Tier;
+  /** The space available. Omit for an unbounded pane. */
+  readonly pane?: PaneSize;
 }
 
 export function Dashboard({
@@ -38,8 +49,40 @@ export function Dashboard({
   nextDue,
   claude,
   tier,
+  pane,
 }: DashboardProps): React.ReactElement {
-  const showPet = petEnabled && tier !== 'minimal';
+  const columns = pane?.columns ?? Number.POSITIVE_INFINITY;
+  const nextLine = nextDue
+    ? `next: ${GROUP_LABELS[nextDue.group].toLowerCase()} ${formatMinutes(nextDue.minutes)}`
+    : null;
+  const footer =
+    tier === 'minimal'
+      ? '[w] water  [p] pick  [q] quit'
+      : '[w] log water   [p] pick something   [q] quit';
+
+  // Everything but the pet, counted so the pet can have what is left. The
+  // rings are one row each except in the tightest layout, where they wrap
+  // into a band of glyphs.
+  const ringRows =
+    rings.length === 0
+      ? 1
+      : tier === 'minimal'
+        ? Math.ceil(rings.length / Math.max(1, Math.floor(columns / 8)))
+        : rings.length;
+  const chrome =
+    1 + // title
+    1 + // gap above the pet
+    textRows(pet.message, columns) +
+    1 +
+    ringRows +
+    1 +
+    2 + // streak, level
+    (nextLine ? 1 + textRows(nextLine, columns) : 0) +
+    1 +
+    textRows(footer, columns);
+
+  const petRows = artRowsFor(pane, chrome);
+  const showPet = petEnabled && tier !== 'minimal' && petRows >= MIN_ART_ROWS;
 
   return (
     <Box flexDirection="column">
@@ -55,7 +98,7 @@ export function Dashboard({
 
       {showPet && (
         <Box marginTop={1} flexDirection="column" alignItems="center">
-          <Sprite sprite={petSprite(pet.mood)} frame={0} />
+          <Sprite sprite={petSprite(pet.mood)} frame={0} maxRows={petRows} />
           <Text color={COLORS.dim}>{pet.message}</Text>
         </Box>
       )}
@@ -89,20 +132,14 @@ export function Dashboard({
         </Box>
       </Box>
 
-      {nextDue && (
+      {nextLine && (
         <Box marginTop={1}>
-          <Text color={COLORS.faint}>
-            next: {GROUP_LABELS[nextDue.group].toLowerCase()} {formatMinutes(nextDue.minutes)}
-          </Text>
+          <Text color={COLORS.faint}>{nextLine}</Text>
         </Box>
       )}
 
       <Box marginTop={1}>
-        <Text color={COLORS.faint}>
-          {tier === 'minimal'
-            ? '[w] water  [p] pick  [q] quit'
-            : '[w] log water   [p] pick something   [q] quit'}
-        </Text>
+        <Text color={COLORS.faint}>{footer}</Text>
       </Box>
     </Box>
   );

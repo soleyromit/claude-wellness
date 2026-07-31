@@ -83,16 +83,27 @@ to `false` in `~/.claude-wellness/config.json`.
 The scheduler decides what to offer, but it never gets the last word — whether
 you can drop and do push-ups right now depends on things it can't see.
 
-- On a nudge, **`tab`** swaps the offer for something else. The counter shows
-  where you are in the list, and alternatives from the same group come first.
-- On the dashboard, **`p`** opens the picker: groups as tabs, then a grid of
-  tiles — each with its own art, so you can see what an activity is rather than
-  reading its name. `←→↑↓` moves, `enter` starts.
+There is one menu, reached from either screen: **`p`** on the dashboard, or
+**`tab`** on a nudge when the offer isn't what you can do right now. Groups are
+tabs along the top, the group's activities are a list, and whatever you have
+selected is drawn large beside it — so you choose by looking at the thing, not
+by reading its name. `←→` changes group, `↑↓` walks the list, `enter` starts.
 
-  Every activity is listed, including ones you've switched off. Turning
-  something off means "stop reminding me", not "hide it from me": tiles are
-  marked **auto** when the scheduler will remind you, **manual** when it's
-  yours to start, and **due now** when it's waiting.
+Every activity is listed, including ones you've switched off. Turning something
+off means "stop reminding me", not "hide it from me": rows are marked **auto**
+when the scheduler will remind you, **manual** when it's yours to start, and
+**due now** when it's waiting.
+
+Every screen sizes itself to the pane in both directions, not just width, so a
+short pane gets smaller art rather than a screen whose top has scrolled out of
+view. Art is the first thing to give; the words that tell you what to press are
+the last.
+
+The menu goes further: its layout doesn't depend on what you have selected or
+which group you are in. Tabs, list, preview and cue are all measured across the
+whole catalogue and hold their space, so moving through the menu never moves the
+menu — the row you are aiming at is still where you aimed. When a group outgrows
+the pane the list scrolls and says how many rows are off the end of it.
 
 ## Commands
 
@@ -170,7 +181,7 @@ Art is authored in 24-bit colour and degrades to 256 or 16 colours automatically
 
 ```sh
 npm install
-npm test          # 531 tests
+npm test          # 558 tests
 npm run build
 ```
 
@@ -184,4 +195,6 @@ Adding an activity means one entry in `src/core/activities.ts` and one sprite in
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+Copyright © 2026 The UX Chats. Developed by Romit Soley.

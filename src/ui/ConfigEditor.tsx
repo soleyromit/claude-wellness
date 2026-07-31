@@ -22,7 +22,8 @@ import {
   setActivityEnabled,
   setGroupConfig,
 } from '../store/config.js';
-import { COLORS, GROUP_COLORS, GROUP_GLYPHS } from './theme.js';
+import { insetPane, usePaneSize } from './pane.js';
+import { COLORS, GROUP_COLORS, GROUP_GLYPHS, textRows, tierFor } from './theme.js';
 
 /** Flattened list of rows so arrow-key navigation is a single index. */
 type Row =
@@ -143,19 +144,52 @@ export function ConfigEditor({ env }: ConfigEditorProps): React.ReactElement {
     }
   });
 
+  // Expanding every group is more rows than most panes have, so the list
+  // scrolls inside whatever is left after the text around it.
+  const pane = insetPane(usePaneSize());
+  const tier = tierFor(pane.columns, pane.rows);
+  const terse = tier === 'minimal';
+
   const enabledCount = ACTIVITY_GROUPS.filter((g) => config.groups[g].enabled).length;
+  const summary = terse
+    ? `${enabledCount}/${ACTIVITY_GROUPS.length} groups on`
+    : `${enabledCount} of ${ACTIVITY_GROUPS.length} groups on · saved automatically`;
+  const bellState = config.attention.bell ? 'bell on' : 'bell off';
+  const bellPrefix = terse ? '' : 'alert on nudge: ';
+  const bellSuffix = terse ? ' · [b]' : ' · press [b]';
+  const keys = terse
+    ? ['↑↓ move · [space] on/off', '[enter] expand · [q] done']
+    : [
+        '↑↓ move · [space] on/off · [enter] expand group',
+        '←→ interval · +/- daily goal · [b] bell · [q] done',
+      ];
+
+  const chrome =
+    1 + // title
+    textRows(summary, pane.columns) +
+    1 + // gap above the list
+    1 +
+    textRows(`${bellPrefix}${bellState}${bellSuffix}`, pane.columns) +
+    1 +
+    keys.reduce((total, line) => total + textRows(line, pane.columns), 0);
+
+  const room = Math.max(1, pane.rows - chrome);
+  const windowed = room < rows.length;
+  const visible = windowed ? Math.max(1, room - 1) : rows.length;
+  const cursorRow = Math.min(cursor, rows.length - 1);
+  const start = Math.max(0, Math.min(cursorRow - visible + 1, rows.length - visible));
+  const below = rows.length - start - visible;
 
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold color={COLORS.accent}>
         your routine
       </Text>
-      <Text color={COLORS.faint}>
-        {enabledCount} of {ACTIVITY_GROUPS.length} groups on · saved automatically
-      </Text>
+      <Text color={COLORS.faint}>{summary}</Text>
 
       <Box marginTop={1} flexDirection="column">
-        {rows.map((row, index) => {
+        {rows.slice(start, start + visible).map((row, offset) => {
+          const index = start + offset;
           const selected = index === cursor;
           const pointer = selected ? '❯ ' : '  ';
 
@@ -163,7 +197,7 @@ export function ConfigEditor({ env }: ConfigEditorProps): React.ReactElement {
             const groupConfig = config.groups[row.group];
             const isExpanded = expanded.has(row.group);
             return (
-              <Box key={`g-${row.group}`}>
+              <Box key={`g-${row.group}`} width={pane.columns}>
                 <Text color={selected ? COLORS.accent : COLORS.faint}>{pointer}</Text>
                 <Text color={groupConfig.enabled ? COLORS.success : COLORS.faint}>
                   {groupConfig.enabled ? '[x]' : '[ ]'}{' '}
@@ -177,8 +211,10 @@ export function ConfigEditor({ env }: ConfigEditorProps): React.ReactElement {
                     {GROUP_LABELS[row.group]}
                   </Text>
                 </Box>
-                <Text color={COLORS.dim}>
-                  every {groupConfig.everyMinutes}m · goal {groupConfig.dailyGoal}
+                <Text color={COLORS.dim} wrap="truncate-end">
+                  {terse
+                    ? `${groupConfig.everyMinutes}m/${groupConfig.dailyGoal}`
+                    : `every ${groupConfig.everyMinutes}m · goal ${groupConfig.dailyGoal}`}
                 </Text>
                 <Text color={COLORS.faint}>{isExpanded ? '  ▾' : '  ▸'}</Text>
               </Box>
@@ -188,27 +224,37 @@ export function ConfigEditor({ env }: ConfigEditorProps): React.ReactElement {
           const activity = ACTIVITIES.find((a) => a.id === row.id)!;
           const on = isActivityEnabled(config, row.id);
           return (
-            <Box key={`a-${row.id}`}>
+            <Box key={`a-${row.id}`} width={pane.columns}>
               <Text color={selected ? COLORS.accent : COLORS.faint}>{pointer}</Text>
               <Text color={COLORS.faint}>{'   '}</Text>
               <Text color={on ? COLORS.success : COLORS.faint}>{on ? '[x]' : '[ ]'} </Text>
-              <Text color={on ? COLORS.dim : COLORS.faint}>{activity.title}</Text>
+              <Text color={on ? COLORS.dim : COLORS.faint} wrap="truncate-end">
+                {activity.title}
+              </Text>
             </Box>
           );
         })}
+        {windowed && (
+          <Text color={COLORS.faint}>
+            {start > 0 ? `  ▴ ${start} more` : ''}
+            {start > 0 && below > 0 ? '   ' : ''}
+            {below > 0 ? `▾ ${below} more` : ''}
+          </Text>
+        )}
       </Box>
 
       <Box marginTop={1}>
-        <Text color={COLORS.faint}>alert on nudge: </Text>
-        <Text color={config.attention.bell ? COLORS.success : COLORS.faint}>
-          {config.attention.bell ? 'bell on' : 'bell off'}
-        </Text>
-        <Text color={COLORS.faint}> · press [b]</Text>
+        {bellPrefix && <Text color={COLORS.faint}>{bellPrefix}</Text>}
+        <Text color={config.attention.bell ? COLORS.success : COLORS.faint}>{bellState}</Text>
+        <Text color={COLORS.faint}>{bellSuffix}</Text>
       </Box>
 
       <Box marginTop={1} flexDirection="column">
-        <Text color={COLORS.faint}>↑↓ move · [space] on/off · [enter] expand group</Text>
-        <Text color={COLORS.faint}>←→ interval · +/- daily goal · [b] bell · [q] done</Text>
+        {keys.map((line) => (
+          <Text key={line} color={COLORS.faint}>
+            {line}
+          </Text>
+        ))}
       </Box>
     </Box>
   );

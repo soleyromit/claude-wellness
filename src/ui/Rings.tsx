@@ -39,14 +39,16 @@ export function Rings({ rings, tier }: RingsProps): React.ReactElement {
   }
 
   const barWidth = tier === 'full' ? 16 : 10;
-  const labelWidth = 10;
+  // Wide enough for the longest label plus its glyph: at ten, "◆ Hydration"
+  // wrapped onto a second line and quietly cost the dashboard a row.
+  const labelWidth = 12;
 
   return (
     <Box flexDirection="column">
       {rings.map((ring) => (
         <Box key={ring.group}>
           <Box width={labelWidth}>
-            <Text color={GROUP_COLORS[ring.group]}>
+            <Text color={GROUP_COLORS[ring.group]} wrap="truncate-end">
               {GROUP_GLYPHS[ring.group]} {GROUP_LABELS[ring.group]}
             </Text>
           </Box>

@@ -6,9 +6,9 @@
  * be both slow and flickery; one string per frame repaints cleanly.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
-import { renderSprite, type Sprite as SpriteData } from '../render/pixel.js';
+import { fitToBox, renderSprite, type Sprite as SpriteData } from '../render/pixel.js';
 import { detectColorDepth } from '../render/palette.js';
 
 const DEPTH = detectColorDepth();
@@ -21,6 +21,12 @@ export interface SpriteProps {
   readonly frameMs?: number;
   /** Pause the animation without unmounting. */
   readonly paused?: boolean;
+  /**
+   * Terminal rows and columns the art may occupy. It is scaled down to fit
+   * both; art that already fits is left alone.
+   */
+  readonly maxRows?: number;
+  readonly maxColumns?: number;
 }
 
 /**
@@ -29,9 +35,23 @@ export interface SpriteProps {
  */
 const DEFAULT_FRAME_MS = 500;
 
-export function Sprite({ sprite, frame, frameMs = DEFAULT_FRAME_MS, paused }: SpriteProps): React.ReactElement {
+export function Sprite({
+  sprite,
+  frame,
+  frameMs = DEFAULT_FRAME_MS,
+  paused,
+  maxRows,
+  maxColumns,
+}: SpriteProps): React.ReactElement {
   const [tick, setTick] = useState(0);
   const controlled = frame !== undefined;
+  const shown = useMemo(
+    () =>
+      maxRows === undefined && maxColumns === undefined
+        ? sprite
+        : fitToBox(sprite, maxRows, maxColumns),
+    [sprite, maxRows, maxColumns],
+  );
 
   useEffect(() => {
     if (controlled || paused) return;
@@ -40,7 +60,7 @@ export function Sprite({ sprite, frame, frameMs = DEFAULT_FRAME_MS, paused }: Sp
   }, [controlled, paused, frameMs]);
 
   const index = controlled ? frame : tick;
-  const text = renderSprite(sprite, index, DEPTH);
+  const text = renderSprite(shown, index, DEPTH);
 
   return (
     <Box flexDirection="column">
