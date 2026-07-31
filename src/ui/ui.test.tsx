@@ -6,7 +6,7 @@ import { buildPlan, sessionStateAt } from '../core/session.js';
 import type { Ring } from '../core/progress.js';
 import { Dashboard } from './Dashboard.js';
 import { Nudge } from './Nudge.js';
-import { Picker } from './Picker.js';
+import { Picker, groupActivities } from './Picker.js';
 import { Rings } from './Rings.js';
 import { Session, SessionComplete } from './Session.js';
 import { bar, formatMinutes, tierFor } from './theme.js';
@@ -186,65 +186,97 @@ describe('Nudge', () => {
 describe('Picker', () => {
   const activities = [
     getActivity('exercise-squats')!,
+    getActivity('exercise-plank')!,
     getActivity('stretch-wrists')!,
     getActivity('breathe-box')!,
   ];
   const due = new Set(['exercise-squats']);
 
-  it('lists the activities with the cursor on one', () => {
-    const out = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={0} tier="full" />).lastFrame(),
-    );
+  const props = {
+    activities,
+    dueIds: due,
+    column: 'groups' as const,
+    groupIndex: 0,
+    activityIndex: 0,
+    tier: 'full' as const,
+  };
+
+  it('groups activities so the list never grows with the catalogue', () => {
+    const grouped = groupActivities(activities, due);
+    expect(grouped.map((g) => g.group)).toEqual(['exercise', 'stretch', 'breathing']);
+    expect(grouped[0]!.activities).toHaveLength(2);
+  });
+
+  it('counts what is due in each group', () => {
+    const grouped = groupActivities(activities, due);
+    expect(grouped[0]!.dueCount).toBe(1);
+    expect(grouped[1]!.dueCount).toBe(0);
+  });
+
+  it('shows the groups with their due counts', () => {
+    const out = plain(render(<Picker {...props} />).lastFrame());
+    expect(out).toContain('Exercise');
+    expect(out).toContain('Stretch');
+    expect(out).toContain('1 due');
+  });
+
+  it('shows the selected group\'s activities beside it', () => {
+    const out = plain(render(<Picker {...props} />).lastFrame());
     expect(out).toContain('Sit-to-stand squats');
+    expect(out).toContain('Plank');
+    // Another group's activities are not in the list.
+    expect(out).not.toContain('Wrist & finger stretch');
+  });
+
+  it('follows the group selection', () => {
+    const out = plain(render(<Picker {...props} groupIndex={1} />).lastFrame());
     expect(out).toContain('Wrist & finger stretch');
-    expect(out).toContain('❯');
+    expect(out).not.toContain('Sit-to-stand squats');
   });
 
-  it('marks which activities are due', () => {
-    const out = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={0} tier="full" />).lastFrame(),
+  it('shows a cursor in the focused column only', () => {
+    const onGroups = plain(render(<Picker {...props} />).lastFrame());
+    const onActivities = plain(
+      render(<Picker {...props} column="activities" />).lastFrame(),
     );
-    expect(out).toContain('due');
+    // Exactly one cursor either way, so it is always clear what arrows drive.
+    expect((onGroups.match(/❯/g) ?? []).length).toBe(1);
+    expect((onActivities.match(/❯/g) ?? []).length).toBe(1);
+    expect(onGroups).not.toBe(onActivities);
   });
 
-  it('shows a position counter', () => {
-    const out = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={1} tier="full" />).lastFrame(),
-    );
-    expect(out).toContain('2/3');
-  });
-
-  it('previews the highlighted activity, so you see it before committing', () => {
-    const out = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={1} tier="full" />).lastFrame(),
-    );
-    // The sprite renders as half-block glyphs, and the cue names the activity.
+  it('previews the highlighted activity before you commit to it', () => {
+    const out = plain(render(<Picker {...props} />).lastFrame());
     expect(out).toContain('▀');
-    expect(out).toContain('RSI');
+    expect(out).toContain('chair you are already in');
   });
 
-  it('previews whatever the cursor moves to', () => {
-    const first = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={0} tier="full" />).lastFrame(),
-    );
-    const second = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={2} tier="full" />).lastFrame(),
-    );
-    expect(first).toContain('chair you are already in');
-    expect(second).toContain('marker around the box');
+  it('previews whatever the selection moves to', () => {
+    const out = plain(render(<Picker {...props} groupIndex={2} />).lastFrame());
+    expect(out).toContain('marker around the box');
   });
 
-  it('drops the preview rather than squeezing the list in a narrow pane', () => {
-    const out = plain(
-      render(<Picker activities={activities} dueIds={due} cursor={0} tier="compact" />).lastFrame(),
-    );
+  it('drops the preview rather than squeezing the columns in a narrow pane', () => {
+    const out = plain(render(<Picker {...props} tier="compact" />).lastFrame());
+    expect(out).toContain('Exercise');
     expect(out).toContain('Sit-to-stand squats');
     expect(out).not.toContain('▀');
   });
 
+  it('shows one column at a time in the narrowest pane', () => {
+    const groups = plain(render(<Picker {...props} tier="minimal" />).lastFrame());
+    expect(groups).toContain('Exercise');
+    expect(groups).not.toContain('Sit-to-stand squats');
+
+    const list = plain(
+      render(<Picker {...props} tier="minimal" column="activities" />).lastFrame(),
+    );
+    expect(list).toContain('Sit-to-stand squats');
+  });
+
   it('explains how to fix an empty routine', () => {
     const out = plain(
-      render(<Picker activities={[]} dueIds={new Set()} cursor={0} tier="full" />).lastFrame(),
+      render(<Picker {...props} activities={[]} dueIds={new Set()} />).lastFrame(),
     );
     expect(out).toContain('wellness config');
   });

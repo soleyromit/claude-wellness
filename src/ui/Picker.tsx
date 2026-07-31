@@ -1,38 +1,91 @@
 /**
  * Choose an activity yourself.
  *
- * The scheduler deciding for you is right when it interrupts — you shouldn't
- * have to make a decision mid-task. It's wrong as the *only* option, because
- * whether you can drop and do push-ups right now depends on things the
- * scheduler can't see.
+ * Laid out as three columns — groups, then the activities in the selected
+ * group, then a preview of whatever is highlighted.
  *
- * The list is paired with a live preview of whatever is highlighted. Picking
- * from titles alone means committing to an activity before you know what it
- * involves; seeing the animation as you arrow through is the difference between
- * a menu and a catalogue. In panes too narrow to hold both, the preview is
- * dropped rather than the list squeezed.
+ * A flat list was fine at seventeen activities and stops being fine well
+ * before thirty: you scroll past things you'd have picked, and there is no way
+ * to answer "what stretches are there?" without reading every row. Columns
+ * keep the visible list to one group's worth however many exist in total, and
+ * the group column doubles as a summary of what's due.
+ *
+ * The preview matters as much as the list. Picking from titles alone means
+ * committing to an activity before knowing what it involves.
+ *
+ * Narrow panes drop columns from the right — preview first, then the activity
+ * list — rather than squeezing all three.
  */
 
 import React from 'react';
 import { Box, Text } from 'ink';
 import { GROUP_LABELS } from '../core/activities.js';
-import type { Activity } from '../core/types.js';
+import type { Activity, ActivityGroup } from '../core/types.js';
 import { getSprite } from '../sprites/index.js';
 import { Sprite } from './Sprite.js';
 import { COLORS, GROUP_COLORS, GROUP_GLYPHS, type Tier } from './theme.js';
 
+export type PickerColumn = 'groups' | 'activities';
+
 export interface PickerProps {
+  /** Every selectable activity, already ordered most-overdue-first. */
   readonly activities: readonly Activity[];
   readonly dueIds: ReadonlySet<string>;
-  readonly cursor: number;
+  readonly column: PickerColumn;
+  readonly groupIndex: number;
+  readonly activityIndex: number;
   readonly tier: Tier;
 }
 
-/** Rows visible at once, so a long list scrolls rather than overflowing. */
-const WINDOW = 8;
+export interface GroupEntry {
+  readonly group: ActivityGroup;
+  readonly activities: readonly Activity[];
+  readonly dueCount: number;
+}
 
-export function Picker({ activities, dueIds, cursor, tier }: PickerProps): React.ReactElement {
-  if (activities.length === 0) {
+/**
+ * Bucket the flat list into groups, keeping the order the scheduler produced
+ * so the most overdue group stays at the top.
+ */
+export function groupActivities(
+  activities: readonly Activity[],
+  dueIds: ReadonlySet<string>,
+): GroupEntry[] {
+  const order: ActivityGroup[] = [];
+  const byGroup = new Map<ActivityGroup, Activity[]>();
+
+  for (const activity of activities) {
+    if (!byGroup.has(activity.group)) {
+      byGroup.set(activity.group, []);
+      order.push(activity.group);
+    }
+    byGroup.get(activity.group)!.push(activity);
+  }
+
+  return order.map((group) => {
+    const list = byGroup.get(group)!;
+    return {
+      group,
+      activities: list,
+      dueCount: list.filter((a) => dueIds.has(a.id)).length,
+    };
+  });
+}
+
+/** Rows visible in the activity column before it scrolls. */
+const WINDOW = 9;
+
+export function Picker({
+  activities,
+  dueIds,
+  column,
+  groupIndex,
+  activityIndex,
+  tier,
+}: PickerProps): React.ReactElement {
+  const groups = groupActivities(activities, dueIds);
+
+  if (groups.length === 0) {
     return (
       <Box flexDirection="column">
         <Text bold color={COLORS.accent}>
@@ -47,14 +100,17 @@ export function Picker({ activities, dueIds, cursor, tier }: PickerProps): React
     );
   }
 
-  const selected = activities[Math.min(cursor, activities.length - 1)]!;
-  // A 32px sprite is 16 terminal lines; only offer the preview where the pane
-  // can hold it beside the list without either being cramped.
-  const showPreview = tier === 'full';
+  const groupEntry = groups[Math.min(groupIndex, groups.length - 1)]!;
+  const inGroup = groupEntry.activities;
+  const selected = inGroup[Math.min(activityIndex, inGroup.length - 1)]!;
 
-  const start = Math.max(0, Math.min(cursor - Math.floor(WINDOW / 2), activities.length - WINDOW));
+  const showPreview = tier === 'full';
+  const showActivities = tier !== 'minimal' || column === 'activities';
+  const showGroups = tier !== 'minimal' || column === 'groups';
+
+  const start = Math.max(0, Math.min(activityIndex - Math.floor(WINDOW / 2), inGroup.length - WINDOW));
   const offset = Math.max(0, start);
-  const visible = activities.slice(offset, offset + WINDOW);
+  const visible = inGroup.slice(offset, offset + WINDOW);
 
   return (
     <Box flexDirection="column">
@@ -64,50 +120,88 @@ export function Picker({ activities, dueIds, cursor, tier }: PickerProps): React
         </Text>
         <Text color={COLORS.faint}>
           {'  '}
-          {cursor + 1}/{activities.length}
+          {activities.length} available
         </Text>
       </Box>
 
       <Box marginTop={1}>
-        <Box flexDirection="column" marginRight={showPreview ? 2 : 0}>
-          {visible.map((activity, i) => {
-            const index = offset + i;
-            const isSelected = index === cursor;
-            const due = dueIds.has(activity.id);
-            return (
-              <Box key={activity.id}>
-                <Text color={isSelected ? COLORS.accent : COLORS.faint}>
-                  {isSelected ? '❯ ' : '  '}
-                </Text>
-                <Text color={GROUP_COLORS[activity.group]}>
-                  {GROUP_GLYPHS[activity.group]}{' '}
-                </Text>
-                {/* Without a preview competing for width, give the titles the
-                    space back rather than truncating them to "Sit-to-sta…". */}
-                <Box width={showPreview ? 22 : 26}>
-                  <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.dim}>
-                    {activity.title}
+        {showGroups && (
+          <Box flexDirection="column" marginRight={2}>
+            {groups.map((entry, i) => {
+              const active = i === groupIndex;
+              // Only the focused column shows a cursor, so it's always clear
+              // which one the arrow keys are driving.
+              const focused = active && column === 'groups';
+              return (
+                <Box key={entry.group}>
+                  <Text color={focused ? COLORS.accent : COLORS.faint}>
+                    {focused ? '❯ ' : '  '}
+                  </Text>
+                  <Text color={GROUP_COLORS[entry.group]}>
+                    {GROUP_GLYPHS[entry.group]}{' '}
+                  </Text>
+                  <Box width={11}>
+                    <Text bold={active} color={active ? COLORS.text : COLORS.dim}>
+                      {GROUP_LABELS[entry.group]}
+                    </Text>
+                  </Box>
+                  <Text color={entry.dueCount > 0 ? COLORS.warn : COLORS.faint}>
+                    {entry.dueCount > 0 ? `${entry.dueCount} due` : `${entry.activities.length}`}
                   </Text>
                 </Box>
-                {due && <Text color={COLORS.warn}>due</Text>}
-              </Box>
-            );
-          })}
-        </Box>
+              );
+            })}
+          </Box>
+        )}
+
+        {showActivities && (
+          <Box flexDirection="column" marginRight={showPreview ? 2 : 0}>
+            {visible.map((activity, i) => {
+              const index = offset + i;
+              const active = index === activityIndex;
+              const focused = active && column === 'activities';
+              return (
+                <Box key={activity.id}>
+                  <Text color={focused ? COLORS.accent : COLORS.faint}>
+                    {focused ? '❯ ' : '  '}
+                  </Text>
+                  <Box width={showPreview ? 22 : 26}>
+                    <Text
+                      bold={focused}
+                      color={
+                        column === 'activities'
+                          ? active
+                            ? COLORS.text
+                            : COLORS.dim
+                          : COLORS.faint
+                      }
+                    >
+                      {activity.title}
+                    </Text>
+                  </Box>
+                  {dueIds.has(activity.id) && <Text color={COLORS.warn}>due</Text>}
+                </Box>
+              );
+            })}
+            {inGroup.length > WINDOW && (
+              <Text color={COLORS.faint}>
+                {'  '}
+                +{inGroup.length - WINDOW} more
+              </Text>
+            )}
+          </Box>
+        )}
 
         {showPreview && (
           <Box flexDirection="column" alignItems="center">
             {/* Keyed on the activity so the animation restarts when you move. */}
-            <Sprite key={selected.id} sprite={getSprite(selected.sprite)} frameMs={160} />
+            <Sprite key={selected.id} sprite={getSprite(selected.sprite)} frameMs={140} />
           </Box>
         )}
       </Box>
 
-      {showPreview && (
-        <Box marginTop={1} flexDirection="column">
-          <Text color={GROUP_COLORS[selected.group]}>
-            {GROUP_LABELS[selected.group]}
-          </Text>
+      {tier !== 'minimal' && (
+        <Box marginTop={1}>
           <Text color={COLORS.dim} wrap="wrap">
             {selected.cue}
           </Text>
@@ -115,7 +209,11 @@ export function Picker({ activities, dueIds, cursor, tier }: PickerProps): React
       )}
 
       <Box marginTop={1}>
-        <Text color={COLORS.faint}>↑↓ choose · [enter] start · [esc] back</Text>
+        <Text color={COLORS.faint}>
+          {column === 'groups'
+            ? '↑↓ group · → activities · [enter] start · [esc] back'
+            : '↑↓ choose · ← groups · [enter] start · [esc] back'}
+        </Text>
       </Box>
     </Box>
   );

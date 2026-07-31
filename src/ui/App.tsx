@@ -30,7 +30,7 @@ import { loadConfig } from '../store/config.js';
 import { emit, idleSequence, nudgeSequence } from './attention.js';
 import { Dashboard } from './Dashboard.js';
 import { Nudge } from './Nudge.js';
-import { Picker } from './Picker.js';
+import { Picker, groupActivities, type PickerColumn } from './Picker.js';
 import { Session, SessionComplete } from './Session.js';
 import { COLORS, tierFor } from './theme.js';
 
@@ -55,7 +55,12 @@ type Screen =
       readonly alternatives: readonly Activity[];
       readonly index: number;
     }
-  | { readonly kind: 'picker'; readonly cursor: number }
+  | {
+      readonly kind: 'picker';
+      readonly column: PickerColumn;
+      readonly groupIndex: number;
+      readonly activityIndex: number;
+    }
   | { readonly kind: 'session'; readonly plan: SessionPlan; readonly startedAt: number }
   | { readonly kind: 'complete'; readonly title: string; readonly xp: number; readonly at: number };
 
@@ -261,21 +266,57 @@ export function App({ env }: AppProps): React.ReactElement {
     }
 
     if (screen.kind === 'picker') {
-      const options = selectable;
-      if (key.escape || input === 'q') {
+      const groups = groupActivities(selectable, dueIds);
+      if (groups.length === 0) {
         setScreen({ kind: 'dashboard' });
         return;
       }
-      if (key.upArrow || input === 'k') {
-        setScreen({ ...screen, cursor: (screen.cursor - 1 + options.length) % options.length });
+
+      const groupIndex = Math.min(screen.groupIndex, groups.length - 1);
+      const inGroup = groups[groupIndex]!.activities;
+      const activityIndex = Math.min(screen.activityIndex, inGroup.length - 1);
+
+      if (key.escape || input === 'q') {
+        // Escape steps back out one column before leaving, so it undoes the
+        // last thing you did rather than discarding the whole navigation.
+        if (screen.column === 'activities') {
+          setScreen({ ...screen, column: 'groups' });
+        } else {
+          setScreen({ kind: 'dashboard' });
+        }
         return;
       }
-      if (key.downArrow || input === 'j') {
-        setScreen({ ...screen, cursor: (screen.cursor + 1) % options.length });
+
+      if (key.rightArrow || (key.tab && !key.shift)) {
+        setScreen({ ...screen, column: 'activities', groupIndex, activityIndex: 0 });
         return;
       }
+      if (key.leftArrow || (key.tab && key.shift)) {
+        setScreen({ ...screen, column: 'groups', groupIndex, activityIndex });
+        return;
+      }
+
+      const step = key.upArrow || input === 'k' ? -1 : key.downArrow || input === 'j' ? 1 : 0;
+      if (step !== 0) {
+        if (screen.column === 'groups') {
+          const next = (groupIndex + step + groups.length) % groups.length;
+          setScreen({ ...screen, groupIndex: next, activityIndex: 0 });
+        } else {
+          const next = (activityIndex + step + inGroup.length) % inGroup.length;
+          setScreen({ ...screen, groupIndex, activityIndex: next });
+        }
+        return;
+      }
+
       if (key.return) {
-        const chosen = options[screen.cursor];
+        // Enter on a group drills in; on an activity it starts. Starting
+        // straight from the group column would mean guessing which of its
+        // activities you meant.
+        if (screen.column === 'groups') {
+          setScreen({ ...screen, column: 'activities', groupIndex, activityIndex: 0 });
+          return;
+        }
+        const chosen = inGroup[activityIndex];
         if (chosen) start(chosen);
       }
       return;
@@ -341,7 +382,9 @@ export function App({ env }: AppProps): React.ReactElement {
     }
     if (input === 'n' || input === 'p') {
       // Choose deliberately rather than accepting whatever is next in line.
-      if (selectable.length > 0) setScreen({ kind: 'picker', cursor: 0 });
+      if (selectable.length > 0) {
+        setScreen({ kind: 'picker', column: 'groups', groupIndex: 0, activityIndex: 0 });
+      }
     }
   });
 
@@ -381,7 +424,9 @@ export function App({ env }: AppProps): React.ReactElement {
         <Picker
           activities={selectable}
           dueIds={dueIds}
-          cursor={Math.min(screen.cursor, Math.max(0, selectable.length - 1))}
+          column={screen.column}
+          groupIndex={screen.groupIndex}
+          activityIndex={screen.activityIndex}
           tier={tier}
         />
       )}
